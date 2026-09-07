@@ -17,6 +17,10 @@ if (-not (Listening $S.WorldPort)) {
 
 $client = $S.ClientDir
 $exe = Join-Path $client $S.ClientExe
+# never start a second copy of the game (a second launcher run would also clobber the realmlist backup of the first)
+$exeName = [IO.Path]::GetFileNameWithoutExtension($S.ClientExe)
+$already = Get-CimInstance Win32_Process -Filter "name='$($S.ClientExe)'" -ErrorAction SilentlyContinue | Where-Object { $_.ExecutablePath -like "$client*" -or -not $_.ExecutablePath }
+if ($already) { Write-Host "the game is already running (pid $($already[0].ProcessId)) - look for its window" -ForegroundColor Yellow; Start-Sleep 4; exit 0 }
 if (-not (Test-Path $exe)) { Write-Host "client not found: $exe  (set ClientDir / ClientExe in server\settings.local.json)" -ForegroundColor Red; Read-Host "press Enter"; exit 1 }
 
 # realmlist.wtf lives in Data\<locale>\ on 3.3.5a clients (older layouts keep it next to the exe)
@@ -34,11 +38,15 @@ Write-Host "realmlist -> $realm  ($($rlFiles.Count) file(s))"
 $hook = Join-Path $PSScriptRoot "prelaunch.local.ps1"
 if (Test-Path $hook) { & $hook }
 
-$proc = Start-Process -FilePath $exe -WorkingDirectory $client -PassThru
+Start-Process -FilePath $exe -WorkingDirectory $client | Out-Null
 Write-Host "client launched. Login: $($S.Account) / $($S.Password)" -ForegroundColor Green
 if ($S.RestoreRealmlistOnExit) {
     Write-Host "(this window restores your realmlist when the game exits - leave it open)"
-    $proc.WaitForExit()
+    # The exe re-spawns itself (the first process exits within a second and a child carries on), so waiting on the
+    # process we started would restore the realmlist before the real game process has even read it. Wait until no
+    # process of that name is left instead, after a grace period for the hand-off.
+    Start-Sleep 15
+    while (Get-Process $exeName -ErrorAction SilentlyContinue) { Start-Sleep 5 }
     foreach ($f in $rlFiles) { if (Test-Path "$f.solo-backup") { Move-Item "$f.solo-backup" $f -Force } }
     Write-Host "realmlist restored."
 } else { Start-Sleep 3 }
