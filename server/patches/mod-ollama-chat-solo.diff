@@ -1,0 +1,150 @@
+diff --git a/src/mod-ollama-chat_dispatch.cpp b/src/mod-ollama-chat_dispatch.cpp
+index f1364df..d802f3f 100644
+--- a/src/mod-ollama-chat_dispatch.cpp
++++ b/src/mod-ollama-chat_dispatch.cpp
+@@ -263,7 +263,13 @@ namespace
+             case SRC_GENERAL_LOCAL:
+             {
+                 Channel* channel = ResolveChannel(bot, c.request.channelName);
+-                if (!channel || !bot->IsInChannel(channel))
++                if (!channel)
++                    return false;
++                // solo-azeroth: bots only join the General of the zone they logged in to and never re-join when
++                // they travel, so membership goes stale. Join on their behalf rather than dropping the line.
++                if (!bot->IsInChannel(channel))
++                    channel->JoinChannel(bot, "");
++                if (!bot->IsInChannel(channel))
+                     return false;
+ 
+                 // Checked before generating too; re-checked because the only
+diff --git a/src/mod-ollama-chat_handler.cpp b/src/mod-ollama-chat_handler.cpp
+index 264d845..02f6874 100644
+--- a/src/mod-ollama-chat_handler.cpp
++++ b/src/mod-ollama-chat_handler.cpp
+@@ -1357,7 +1357,9 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
+             // membership alone decides, which is checked below.
+             
+             // CHANNEL MEMBERSHIP CHECK: Bot must actually be in the channel
+-            if (!candidate->IsInChannel(channel))
++            // solo-azeroth: for numbered (zone / realm-wide) channels the zone check above is the real test;
++            // membership goes stale as bots travel and is repaired at delivery time. Custom channels keep it.
++            if (chanId == 0 && !candidate->IsInChannel(channel))
+             {
+                 if(g_DebugEnabled)
+                 {
+diff --git a/src/mod-ollama-chat_random.cpp b/src/mod-ollama-chat_random.cpp
+index 710070b..4568060 100644
+--- a/src/mod-ollama-chat_random.cpp
++++ b/src/mod-ollama-chat_random.cpp
+@@ -86,7 +86,10 @@ namespace
+         // the bot's zone is not the same as being in the channel -- players
+         // leave General -- so each resolved channel is checked for a real
+         // listener below before it becomes a candidate.
+-        if (!g_DisableForCustomChannels && world.RealPlayerInZoneAndFaction(bot))
++        // solo-azeroth: zone channels need a real player in the bot's zone; the realm-wide LFG feed only needs a
++        // real player in that channel (checked in addChannel), wherever they are.
++        const bool zoneAudience = !g_DisableForCustomChannels && world.RealPlayerInZoneAndFaction(bot);
++        if (!g_DisableForCustomChannels)
+         {
+             // Resolve real zone/city channels and carry their ACTUAL names
+             // forward. Looking up "General" by name never matches (channels are
+@@ -113,10 +116,10 @@ namespace
+                 options.push_back({ SRC_GENERAL_LOCAL, ch->GetName(), ch->GetChannelId() });
+             };
+ 
+-            addChannel(ChatChannelId::GENERAL,           g_ChatterUseGeneralChannel);
+-            addChannel(ChatChannelId::TRADE,             g_ChatterUseTradeChannel);
++            addChannel(ChatChannelId::GENERAL,           zoneAudience && g_ChatterUseGeneralChannel);
++            addChannel(ChatChannelId::TRADE,             zoneAudience && g_ChatterUseTradeChannel);
+             addChannel(ChatChannelId::LOOKING_FOR_GROUP, g_ChatterUseLfgChannel);
+-            addChannel(ChatChannelId::GUILD_RECRUITMENT, g_ChatterUseGuildRecruitmentChannel);
++            addChannel(ChatChannelId::GUILD_RECRUITMENT, zoneAudience && g_ChatterUseGuildRecruitmentChannel);
+         }
+ 
+         if (options.empty())
+@@ -278,7 +281,12 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+     world.Build();
+ 
+     if (world.Empty())
++    {
++        if (g_DebugEnabled)
++            LOG_INFO("module.ollamachat", "[Ollama Chat] ambient tick: no real players online");
+         return;   // nobody to talk to; do not burn LLM calls on an empty world
++    }
++    uint32 cBots = 0, cAud = 0, cDue = 0, cRoll = 0, cTopic = 0, cDest = 0, cGov = 0, cSent = 0;
+ 
+     auto const& allPlayers = ObjectAccessor::GetPlayers();
+ 
+@@ -294,6 +302,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+         if (!ai || !ai->IsBotAI())
+             continue;
+ 
++        ++cBots;
+         if (g_DisableRepliesInCombat && bot->IsInCombat())
+             continue;
+ 
+@@ -307,6 +316,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+ 
+         if (!guildAudience && !nearRealPlayer)
+             continue;
++        ++cAud;
+ 
+         // Schedule.
+         {
+@@ -320,6 +330,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+             if (now < it->second)
+                 continue;
+         }
++        ++cDue;
+ 
+         auto reschedule = [&]()
+         {
+@@ -332,6 +343,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+             reschedule();
+             continue;
+         }
++        ++cRoll;
+ 
+         // Pick what to talk about. Weighted toward the people and the world
+         // around the bot rather than its own inventory.
+@@ -341,6 +353,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+             reschedule();
+             continue;
+         }
++        ++cTopic;
+ 
+         ChatChannelSourceLocal source = SRC_SAY_LOCAL;
+         std::string channelName;
+@@ -354,6 +367,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+             reschedule();
+             continue;
+         }
++        ++cDest;
+ 
+         // Same inputs the reply path uses, so ambient lines and replies in the
+         // same channel share one cooldown, rate limit and repetition history.
+@@ -368,6 +382,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+             reschedule();
+             continue;
+         }
++        ++cGov;
+ 
+         std::string prompt = BuildRandomChatterPrompt(bot, topic.text);
+         if (prompt.empty())
+@@ -390,8 +405,16 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+         request.triggerBotReplies = true;
+ 
+         if (OllamaDispatch_Submit(std::move(request)))
++        {
++            ++cSent;
+             Topics_NoteUsed(bot->GetGUID(), topic.key);
++        }
+ 
+         reschedule();
+     }
++
++    if (g_DebugEnabled)
++        LOG_INFO("module.ollamachat",
++                 "[Ollama Chat] ambient tick: bots={} audience={} due={} rolled={} topic={} destination={} governor={} submitted={}",
++                 cBots, cAud, cDue, cRoll, cTopic, cDest, cGov, cSent);
+ }
