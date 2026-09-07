@@ -51,7 +51,9 @@ Everything below runs from a normal PowerShell prompt inside `server\`, except s
    Any key from `settings.json` can be overridden there (ports, realm name, bot count and level range, model).
 8. **First run**: `solo.cmd first-run` creates the databases, imports the world (a few minutes) and creates your
    account with GM rights.
-9. **Shortcuts**: `solo.cmd shortcuts` puts four shortcuts on your Desktop.
+9. **Shortcuts**: `solo.cmd shortcuts` puts five shortcuts on your Desktop.
+
+Step-by-step with what you should see after each step, and a troubleshooting table: [HOWTO.md](HOWTO.md).
 
 Then double-click **Solo Azeroth - Play**. It starts everything that is not running, points your client at the
 server, launches the game, and puts your realmlist back when you quit.
@@ -63,6 +65,7 @@ server, launches the game, and puts your realmlist back when you quit.
 | **Solo Azeroth - Play** | start what is needed, launch the client |
 | **Solo Azeroth - Start Server** / **Stop Server** | just the server side |
 | **Solo Azeroth - Bot Settings** | a window for the things you will actually want to tweak: bot count, level range, how chatty they are, which model |
+| **Solo Azeroth - Edit Personalities** | the bot personalities in Notepad; applied and reloaded when you close it |
 | `solo.cmd status` | what is running |
 | `solo.cmd configs` | regenerate the server configs after editing `settings.local.json` or `setup\gen_configs.py` |
 
@@ -73,7 +76,8 @@ changing chat settings or personalities. The bots follow the whole mod-playerbot
 
 ## The chat
 
-Bots pick a personality when they first speak and keep it. The pack in `server\personalities\` sets the mix:
+Bots pick a personality when they first speak and keep it. `server\personalities\personalities.txt` (plain text,
+edit it in Notepad via the Desktop shortcut) sets the voices and the mix:
 half of them are toxic in the ways WoW players are toxic (gatekeepers, meter addicts, trolls, ragers, doomers),
 a third are ordinary (looking for group, asking where things are, selling stuff), a fifth are the nicest people
 you have ever met online. They start conversations in General, Trade and LFG, answer each other, react to what
