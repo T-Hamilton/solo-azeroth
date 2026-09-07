@@ -104,8 +104,16 @@ switch ($cmd) {
     }
     "client"    { & powershell -NoProfile -ExecutionPolicy Bypass -File "$($S.RootDir)\launchers\play.ps1" }
     "shortcuts" {
+        # real .lnk shortcuts: the .cmd files locate their scripts relative to themselves, so copying them would not work
         $desk = [Environment]::GetFolderPath("Desktop")
-        Get-ChildItem "$($S.RootDir)\launchers\*.cmd" | ForEach-Object { Copy-Item $_.FullName (Join-Path $desk $_.Name) -Force; Write-Host "Desktop: $($_.Name)" }
+        $wsh = New-Object -ComObject WScript.Shell
+        Get-ChildItem "$($S.RootDir)\launchers\*.cmd" | ForEach-Object {
+            Remove-Item (Join-Path $desk $_.Name) -ErrorAction SilentlyContinue      # leftovers from the old copy approach
+            $lnk = $wsh.CreateShortcut((Join-Path $desk ($_.BaseName + ".lnk")))
+            $lnk.TargetPath = $_.FullName; $lnk.WorkingDirectory = $_.DirectoryName
+            $lnk.IconLocation = "$env:SystemRoot\System32\imageres.dll,$(if ($_.BaseName -match 'Play') { 149 } elseif ($_.BaseName -match 'Stop') { 100 } elseif ($_.BaseName -match 'Bot') { 109 } else { 94 })"
+            $lnk.Save(); Write-Host "Desktop: $($_.BaseName)"
+        }
     }
     "status" {
         $uri = [uri]$S.OllamaUrl
