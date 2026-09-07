@@ -60,4 +60,5 @@ The `Play` shortcut on this PC keeps working with a LAN address in `RealmAddress
 | MySQL data | `server\mysql\data`, root has no password (bound to 127.0.0.1 only); app user from settings |
 | first-boot log | `server\setup\first_start.log` |
 | Addons from the Ascension copy that error at login (TomTom, WeakAuras 5.x, AtlasLoot 7.x, CoADump, CoA_PowerBars) | they are Ascension's retail-API backports and need its client Lua; parked in `Interface\AddOns.ascension-backup` on 2026-09-07. Use 3.3.5-era builds instead (WeakAuras-WotLK, TomTom 3.3.5, AtlasLoot Enhanced 5.x) |
+| Class trainer opens with no spells / talent tab blank (Ascension copy) | the client's spell and skill tables are Ascension's classless ones; `client-patches\patch-Z.MPQ` must carry the stock ones and `patch-Z6` must be off (`client-patches\README.md`) |
 | Lua errors from the game | copy `client-addons\!SoloErrorLog` into `Interface\AddOns` (the `!` makes it load first, so it also catches other addons' load-time errors); `/errs` in game, or `WTF\Account\<acct>\SavedVariables\SoloErrorLog.lua` after you log out |
