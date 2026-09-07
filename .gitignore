@@ -1,0 +1,15 @@
+# your machine's settings (ports, client path, account)
+server/settings.local.json
+launchers/prelaunch.local.ps1
+
+# everything built, downloaded or generated (30+ GB) - only our scripts and docs are versioned
+server/azerothcore/
+server/build/
+server/runtime/
+server/mysql/
+server/deps/
+server/downloads/
+server/setup/*.log
+server/setup/*.err
+*.log
+__pycache__/
