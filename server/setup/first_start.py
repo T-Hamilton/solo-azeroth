@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """First boot of the worldserver: runs it with a piped console, waits for the world to initialize (the first boot also
 imports the whole world database, which takes a few minutes), creates your account with GM level 3, then shuts the
 server down cleanly.  Usage: first_start.py   (account/password come from settings.json / settings.local.json)"""
@@ -13,6 +13,7 @@ acct, pw = S["Account"], S["Password"]
 log_path = os.path.join(SERVER, "setup", "first_start.log")
 log = open(log_path, "w", encoding="utf-8", errors="replace")
 
+os.makedirs(os.path.join(RUNTIME, "logs"), exist_ok=True)   # AC does not create LogsDir itself
 p = subprocess.Popen([os.path.join(RUNTIME, "worldserver.exe"), "-c", os.path.join(RUNTIME, "configs", "worldserver.conf")],
                      cwd=RUNTIME, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                      text=True, encoding="utf-8", errors="replace", bufsize=1)
@@ -22,9 +23,9 @@ state = {"ready": False, "done": False, "lines": 0}
 def pump():
     for line in p.stdout:
         log.write(line); log.flush(); state["lines"] += 1
-        if "World initialized" in line or "worldserver is ready" in line.lower() or "AC>" in line:
+        if "world initialized" in line.lower() or "worldserver-daemon) ready" in line or "AC>" in line:
             state["ready"] = True
-        if state["lines"] % 200 == 0:
+        if state["lines"] % 2000 == 0:
             print("  ... %d lines (%s)" % (state["lines"], line.strip()[:70]))
     state["done"] = True
 
@@ -47,3 +48,4 @@ try:
 except subprocess.TimeoutExpired:
     p.kill()
 print("worldserver exited %s; log %s (%d lines)" % (p.returncode, log_path, state["lines"]))
+

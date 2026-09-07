@@ -13,3 +13,4 @@ server/setup/*.log
 server/setup/*.err
 *.log
 __pycache__/
+local/

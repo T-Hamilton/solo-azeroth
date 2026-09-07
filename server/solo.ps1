@@ -51,6 +51,7 @@ function Start-Ollama {
 
 function Start-Auth {
     if (Listening $S.AuthPort) { Write-Host "authserver: already listening on $($S.AuthPort)"; return }
+    New-Item -ItemType Directory -Force "$Runtime\logs" | Out-Null   # AC does not create LogsDir; without it file logging is silently off
     if (-not (Test-Path "$Configs\authserver.conf")) { Write-Host "missing $Configs\authserver.conf - run: .\solo.cmd configs"; return }
     Start-Process -FilePath "$Runtime\authserver.exe" -ArgumentList "-c", "`"$Configs\authserver.conf`"" -WorkingDirectory $Runtime
     Write-Host "authserver: starting (port $($S.AuthPort))"
@@ -58,6 +59,7 @@ function Start-Auth {
 
 function Start-World {
     if (Listening $S.WorldPort) { Write-Host "worldserver: already listening on $($S.WorldPort)"; return }
+    New-Item -ItemType Directory -Force "$Runtime\logs" | Out-Null
     if (-not (Test-Path "$Configs\worldserver.conf")) { Write-Host "missing $Configs\worldserver.conf - run: .\solo.cmd configs"; return }
     Start-Process -FilePath "$Runtime\worldserver.exe" -ArgumentList "-c", "`"$Configs\worldserver.conf`"" -WorkingDirectory $Runtime
     Write-Host "worldserver: starting (port $($S.WorldPort)). Give it 30-60 s; bots log in once you do."
