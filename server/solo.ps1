@@ -11,6 +11,7 @@
     .\solo.cmd client       point your WoW client at this server and launch it (same as the Play shortcut)
     .\solo.cmd shortcuts    put the Play / Start / Stop / Bot Settings / Edit Personalities shortcuts on your Desktop
     .\solo.cmd personalities [--reroll]   apply server\personalities\personalities.txt to the bots (edit it in Notepad)
+    .\solo.cmd prompts      apply server\personalities\prompts.txt (the prompt frame around every bot line) to the running server
 
   Each server opens in its own console window so you can type GM commands into it (the worldserver console takes
   commands without the leading dot, e.g.  account set gmlevel player 3 -1  or  ollama status ).
@@ -129,6 +130,12 @@ switch ($cmd) {
     }
     "client"    { & powershell -NoProfile -ExecutionPolicy Bypass -File "$($S.RootDir)\launchers\play.ps1" }
     "personalities" { & $Py "$($S.RootDir)\tools\build_personalities.py" $arg }
+    "prompts" {
+        # server\personalities\prompts.txt -> mod_ollama_chat.conf -> running server (.ollama reload re-reads the templates)
+        & $Py "$($S.ServerDir)\setup\gen_configs.py"
+        $r = (& $Py "$($S.RootDir)\tools\soap.py" "ollama reload" 2>&1) -join " "
+        if ($r -match "reload") { Write-Host "prompts applied to the running server" } else { Write-Host "prompts saved; the server is not running - they apply on the next start" }
+    }
     "shortcuts" {
         # real .lnk shortcuts: the .cmd files locate their scripts relative to themselves, so copying them would not work
         $desk = [Environment]::GetFolderPath("Desktop")
@@ -149,5 +156,5 @@ switch ($cmd) {
         }
         Get-Process worldserver, authserver, mysqld, ollama -ErrorAction SilentlyContinue | Format-Table Id, ProcessName, @{n = "MB"; e = { [int]($_.WorkingSet64 / 1MB) } }, Path -AutoSize
     }
-    default { Write-Host "usage: .\solo.cmd start | stop | status | mysql | ollama | configs | first-run | client | shortcuts | personalities [--reroll]" }
+    default { Write-Host "usage: .\solo.cmd start | stop | status | mysql | ollama | configs | first-run | client | shortcuts | personalities [--reroll] | prompts" }
 }

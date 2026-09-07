@@ -169,6 +169,10 @@ party), `.gm on`, `.tele orgrimmar`, `.modify speed 3`.
   the LLM event chatter covers those moments with personality. Bot Settings > Bots has both switches.
 - **The personalities and the toxic/normal/nice mix:** Edit Personalities. The number of entries per kind is the mix.
   Details at the top of the file and in `docs/LLM-CHAT.md`.
+- **The frame around every line** (the system prompt and the reply / ambient / event templates: "reply in under 15
+  words", "use real WoW slang"...): Edit Prompts, which opens `server\personalities\prompts.txt` and reloads the
+  running server when you close Notepad. This is what makes all bots sound alike; the personality text can only push
+  against it. Loosen it here.
 - **Ports, realm name, account, model:** `settings.local.json`, then `solo.cmd configs`, then restart.
 - **The chat governor (how often bots speak, how long threads run):** the `OLLAMA` table in
   `setup\gen_configs.py`, explained knob by knob in `docs/LLM-CHAT.md`. Then `solo.cmd configs` and `.ollama reload`.

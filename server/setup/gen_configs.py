@@ -175,6 +175,52 @@ OLLAMA = {
     "OllamaChat.EnableWhisperReplies": "1",
 }
 
+# The prompt frame (system prompt + the templates around every bot line) is edited as plain text in
+# server/personalities/prompts.txt (Edit Prompts shortcut / solo.cmd prompts). Sections present there win over the
+# defaults above; a missing section keeps the module's own default.
+PROMPT_KEYS = {
+    "SYSTEM": "OllamaChat.SystemPrompt",
+    "REPLY": "OllamaChat.ChatPromptTemplate",
+    "REPLY_INFO": "OllamaChat.ChatExtraInfoTemplate",
+    "AMBIENT": "OllamaChat.RandomChatterPromptTemplate",
+    "AMBIENT_TOPICS": "OllamaChat.RandomChatterPromptVariations",
+    "EVENT": "OllamaChat.EventChatterPromptTemplate",
+    "DEFAULT_PERSONALITY": "OllamaChat.DefaultPersonalityPrompt",
+}
+
+
+def load_prompts(path):
+    sections, key, buf = {}, None, []
+    if not os.path.exists(path):
+        return sections
+    for raw in open(path, encoding="utf-8-sig"):
+        line = raw.rstrip("\n")
+        m = re.match(r"^===\s*([A-Za-z0-9_]+)\s*===\s*$", line)
+        if m:
+            if key:
+                sections[key] = buf
+            key, buf = m.group(1).upper(), []
+            continue
+        if line.lstrip().startswith("#"):
+            continue
+        if key and line.strip():
+            buf.append(line.strip())
+    if key:
+        sections[key] = buf
+    out = {}
+    for name, lines in sections.items():
+        if name not in PROMPT_KEYS or not lines:
+            continue
+        text = "|".join(lines) if name == "AMBIENT_TOPICS" else " ".join(lines)
+        out[PROMPT_KEYS[name]] = q(text.replace("\\", "").replace('"', "'"))   # the .conf value is a "..." string
+    return out
+
+
+PROMPTS = load_prompts(os.path.join(SERVER, "personalities", "prompts.txt"))
+OLLAMA.update(PROMPTS)
+if PROMPTS:
+    print("prompts.txt: %d sections applied (%s)" % (len(PROMPTS), ", ".join(k for k in PROMPT_KEYS if PROMPT_KEYS[k] in PROMPTS)))
+
 # Anything saved in the Bot Settings window lands in settings.local.json under "ConfOverrides" and is applied last,
 # so it survives every regeneration: {"ConfOverrides": {"playerbots.conf": {...}, "mod_ollama_chat.conf": {...}}}
 CONF_OVERRIDES = S.get("ConfOverrides", {})
