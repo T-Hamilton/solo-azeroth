@@ -125,11 +125,20 @@ SYSTEM_PROMPT = (
 )
 OLLAMA = {
     "OllamaChat.Enable": "1",
-    "OllamaChat.DebugEnabled": str(S.get("ChatDebug", 0)),   # 1 = log the chat funnel (ambient tick summaries, reply decisions)
+    "OllamaChat.DebugEnabled": str(1 if S.get("ChatDebug", 0) else 0),   # 1 = log the chat funnel (ambient tick summaries, reply decisions)
+    "OllamaChat.DebugShowFullPrompt": str(1 if S.get("ChatDebug", 0) >= 2 else 0),   # ChatDebug 2 = also log every full prompt sent to the model
     "OllamaChat.Url": S["OllamaUrl"].rstrip("/") + "/api/generate",
     "OllamaChat.Model": S["OllamaModel"],
-    "OllamaChat.NumPredict": "60",
+    "OllamaChat.NumPredict": "110",       # room for a two-sentence retort (chat lines are capped at 240 chars anyway)
+    "OllamaChat.NumCtx": "4096",          # explicit context window: system + persona + 16 transcript lines + memories fit with room
     "OllamaChat.Temperature": "0.9",
+    "OllamaChat.RandomChatterQuestionChance": "20",
+    # the conversation layer (our module patch): shared transcript per channel, partner stickiness, ambient hold
+    "OllamaChat.Transcript.Lines": "16",
+    "OllamaChat.Transcript.WindowSeconds": "600",
+    "OllamaChat.BotConversation.EngagedWindowSeconds": "150",
+    "OllamaChat.Ambient.HoldSeconds": "45",
+    "OllamaChat.Ambient.HoldPassPct": "25",
     "OllamaChat.MaxConcurrentQueries": str(S["OllamaParallel"]),
     "OllamaChat.WorkerThreads": str(S["OllamaParallel"]),
     "OllamaChat.SystemPrompt": q(SYSTEM_PROMPT),
@@ -140,7 +149,7 @@ OLLAMA = {
     "OllamaChat.MinRandomInterval": "25",
     "OllamaChat.MaxRandomInterval": "110",
     "OllamaChat.RandomChatterRealPlayerDistance": "100000",
-    "OllamaChat.RandomChatterBotCommentChance": "20",
+    "OllamaChat.RandomChatterBotCommentChance": "15",
     "OllamaChat.RandomChatterMaxBotsPerPlayer": "4",
     "OllamaChat.Chatter.UseGeneralChannel": "1",
     "OllamaChat.Chatter.UseTradeChannel": "1",
@@ -149,28 +158,34 @@ OLLAMA = {
     "OllamaChat.EnableEventChatter": "1",
     "OllamaChat.EventChatterRealPlayerDistance": "60",
     # bots answering bots: this is what makes it a conversation instead of a wall of openers
-    "OllamaChat.BotReplyChance.Say": "25",
-    "OllamaChat.BotReplyChance.Channel": "35",
-    "OllamaChat.BotReplyChance.Party": "30",
-    "OllamaChat.BotReplyChance.Guild": "20",
+    "OllamaChat.BotReplyChance.Say": "40",
+    "OllamaChat.BotReplyChance.Channel": "40",
+    "OllamaChat.BotReplyChance.Party": "35",
+    "OllamaChat.BotReplyChance.Guild": "25",
     "OllamaChat.PlayerReplyChance.Say": "90",
     "OllamaChat.PlayerReplyChance.Channel": "70",
-    "OllamaChat.BotConversation.MaxChainDepth": "6",
-    "OllamaChat.BotConversation.ChanceDecayPct": "80",
+    "OllamaChat.BotConversation.MaxChainDepth": "8",     # an argument may run eight bot-to-bot hops before a person has to feed it
+    "OllamaChat.BotConversation.ChanceDecayPct": "85",
     "OllamaChat.BotConversation.RequireRecentHuman": "0",
-    "OllamaChat.Cooldown.PerBotSeconds": "30",
-    "OllamaChat.Cooldown.PerScopeSeconds": "6",
-    "OllamaChat.RateLimit.ScopePerMinute": "14",
-    "OllamaChat.RateLimit.GlobalPerMinute": "60",
+    # pacing: a bot mid-exchange is exempt from these (direct address); they only pace the crowd
+    "OllamaChat.Cooldown.PerBotSeconds": "10",
+    "OllamaChat.Cooldown.PerScopeSeconds": "2",
+    "OllamaChat.RateLimit.ScopePerMinute": "30",
+    "OllamaChat.RateLimit.GlobalPerMinute": "100",
+    # repetition: the opener check ("same first three words") killed short retorts; keep only the near-duplicate check
+    "OllamaChat.Repetition.OpenerHistorySize": "2",
+    "OllamaChat.Repetition.SimilarityThreshold": "0.82",
+    "OllamaChat.Repetition.WindowSeconds": "600",
     # they remember you, and each other
     "OllamaChat.EnableChatHistory": "1",
     "OllamaChat.Memory.Enable": "1",
     "OllamaChat.Relationship.Enable": "1",
-    "OllamaChat.EnableSentimentTracking": "1",
+    "OllamaChat.EnableSentimentTracking": "0",   # an extra model call per answered line for a +-0.05 tone number; the memories cover it
     # looks like typing instead of a teleporting wall of text
     "OllamaChat.EnableTypingSimulation": "1",
-    "OllamaChat.TypingSimulationBaseDelay": "800",
-    "OllamaChat.TypingSimulationDelayPerChar": "35",
+    "OllamaChat.TypingSimulationBaseDelay": "700",
+    "OllamaChat.TypingSimulationDelayPerChar": "22",
+    "OllamaChat.TypingSimulationMaxDelay": "4500",
     "OllamaChat.DisableRepliesInCombat": "1",
     "OllamaChat.EnableWhisperReplies": "1",
 }
@@ -184,6 +199,8 @@ PROMPT_KEYS = {
     "REPLY_INFO": "OllamaChat.ChatExtraInfoTemplate",
     "AMBIENT": "OllamaChat.RandomChatterPromptTemplate",
     "AMBIENT_TOPICS": "OllamaChat.RandomChatterPromptVariations",
+    "AMBIENT_JOIN": "OllamaChat.Ambient.JoinLine",
+    "ADDRESSED": "OllamaChat.AddressedTemplate",
     "EVENT": "OllamaChat.EventChatterPromptTemplate",
     "DEFAULT_PERSONALITY": "OllamaChat.DefaultPersonalityPrompt",
 }

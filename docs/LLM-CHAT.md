@@ -101,6 +101,24 @@ Three things in mod-ollama-chat kept every bot silent on a fresh install; the fi
 And one thing in our own config: `AiPlayerbot.SelfBotLevel` must stay at 1. At 3 the real player's character gets a
 bot AI attached on login, the module counts them as a bot, and nothing is ever said.
 
+## Why they now answer you (the conversation layer)
+
+Out of the box the module makes quips, not conversation. What the code did, and what the patch changes:
+
+| Stock behaviour | Effect you saw | Now |
+|---|---|---|
+| A reply prompt held one line: the message, plus this bot's private history with you. Nothing another bot had said, no channel context. | A bot answering a bot had never seen what you said; "you're just wrong" landed on a bot that did not know what it was wrong about. | Every scope (a channel instance, the say range in a zone, a party, a whisper pair) keeps a transcript of the last 16 lines with speaker names. Every reply and every ambient line is shown it. |
+| Each message picked responders by a fresh dice roll; the bot mid-exchange with you rolled 95% and was then shuffled with the bystanders. | The answer usually came from someone who was not in the exchange. | Two participants who answered each other are *engaged* for 150 s. Engaged bots are picked first, bystanders fill at most one slot and only 35% of the time. |
+| Only a person's line counted as direct address. A bot answering a bot sat on the 30 s per-bot cooldown and the 6 s channel cooldown. | Bot-to-bot threads died after one line. | Being engaged is direct address for bots too, so an argument can run to the chain-depth limit (8 hops) before a person has to feed it. |
+| "Same first three words as any of the last 8 lines" was a repetition. | Short retorts ("no way, ...") were dropped after generation. | Opener check reduced to the last 2 lines; similarity threshold raised. |
+| Ambient lines carried no context, fired into live threads and triggered replies. | "anyone farming badges?" in the middle of an argument. | While a scope has a line under 45 s old, only 25% of ambient lines get through, and those are told to join the conversation. |
+| A separate model call classified every answered line as POSITIVE/NEGATIVE for a +-0.05 tone number. | One of four generation slots busy with nothing. | Off. The memory and relationship features carry how a bot feels. |
+| "Reply in under 15 words", 60 tokens. | Every bot: "Ugh, seriously?" | Prompt is a chat log ending in "write your next line: answer what was said, use names, take a side, push back". 110 tokens. Both editable in `prompts.txt`. |
+
+Knobs: `Transcript.Lines`, `Transcript.WindowSeconds`, `BotConversation.EngagedWindowSeconds`, `Ambient.HoldSeconds`,
+`Ambient.HoldPassPct` (all under `OllamaChat.` in `setup\gen_configs.py`), and the ADDRESSED and AMBIENT_JOIN sections
+of `personalities\prompts.txt`.
+
 ## Diagnosing "the bots are not talking"
 
 - `.ollama status` in game: endpoint, model, queue depth, delivered and dropped counters. `0 submitted` after a few

@@ -1,5 +1,62 @@
+diff --git a/src/mod-ollama-chat_config.cpp b/src/mod-ollama-chat_config.cpp
+index ebde5db..0e5fc76 100644
+--- a/src/mod-ollama-chat_config.cpp
++++ b/src/mod-ollama-chat_config.cpp
+@@ -124,6 +124,14 @@ float    g_RepetitionSimilarityThreshold = 0.72f;
+ uint32_t g_RepetitionWindowSeconds       = 1800;
+ uint32_t g_OpenerHistorySize             = 8;
+ 
++uint32_t    g_TranscriptLines         = 16;
++uint32_t    g_TranscriptWindowSeconds = 600;
++uint32_t    g_EngagedWindowSeconds    = 150;
++uint32_t    g_AmbientHoldSeconds      = 45;
++uint32_t    g_AmbientHoldPassPct      = 25;
++std::string g_AddressedTemplate       = "{player_name} is talking to you, {bot_name}. Answer them.";
++std::string g_AmbientJoinLine         = "There is a conversation going on above. Jump into it: react to what someone just said, take a side, back someone up or needle them. Do not start a new topic and do not repeat what was said.";
++
+ // --------------------------------------------
+ // Topic engine
+ // --------------------------------------------
+@@ -718,6 +726,15 @@ void LoadOllamaChatConfig()
+     g_RepetitionWindowSeconds         = sConfigMgr->GetOption<uint32_t>("OllamaChat.Repetition.WindowSeconds", 1800);
+     g_OpenerHistorySize               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Repetition.OpenerHistorySize", 8);
+ 
++    // --- Conversation layer (solo-azeroth) --------------------------------
++    g_TranscriptLines                 = sConfigMgr->GetOption<uint32_t>("OllamaChat.Transcript.Lines", 16);
++    g_TranscriptWindowSeconds         = sConfigMgr->GetOption<uint32_t>("OllamaChat.Transcript.WindowSeconds", 600);
++    g_EngagedWindowSeconds            = sConfigMgr->GetOption<uint32_t>("OllamaChat.BotConversation.EngagedWindowSeconds", 150);
++    g_AmbientHoldSeconds              = sConfigMgr->GetOption<uint32_t>("OllamaChat.Ambient.HoldSeconds", 45);
++    g_AmbientHoldPassPct              = sConfigMgr->GetOption<uint32_t>("OllamaChat.Ambient.HoldPassPct", 25);
++    g_AddressedTemplate               = sConfigMgr->GetOption<std::string>("OllamaChat.AddressedTemplate", g_AddressedTemplate);
++    g_AmbientJoinLine                 = sConfigMgr->GetOption<std::string>("OllamaChat.Ambient.JoinLine", g_AmbientJoinLine);
++
+     // --- Topic engine ----------------------------------------------------
+     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);
+     g_TopicWeightWorld                = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightWorld", 30);
+diff --git a/src/mod-ollama-chat_config.h b/src/mod-ollama-chat_config.h
+index 1bf4a26..33a32bd 100644
+--- a/src/mod-ollama-chat_config.h
++++ b/src/mod-ollama-chat_config.h
+@@ -202,6 +202,17 @@ extern float    g_RepetitionSimilarityThreshold;
+ extern uint32_t g_RepetitionWindowSeconds;
+ extern uint32_t g_OpenerHistorySize;
+ 
++// --------------------------------------------
++// Conversation layer (solo-azeroth): shared transcript, engagement, ambient hold
++// --------------------------------------------
++extern uint32_t    g_TranscriptLines;           // lines of recent chat shown to a replying bot
++extern uint32_t    g_TranscriptWindowSeconds;   // and how old a line may be
++extern uint32_t    g_EngagedWindowSeconds;      // two participants who answered each other stay engaged this long
++extern uint32_t    g_AmbientHoldSeconds;        // a scope with a line this recent is "live"
++extern uint32_t    g_AmbientHoldPassPct;        // chance an ambient line is still allowed into a live scope
++extern std::string g_AddressedTemplate;         // {addressed} in the reply template when the line is aimed at this bot
++extern std::string g_AmbientJoinLine;           // replaces the random topic line when the scope is live
++
+ // --------------------------------------------
+ // Topic engine
+ // --------------------------------------------
 diff --git a/src/mod-ollama-chat_dispatch.cpp b/src/mod-ollama-chat_dispatch.cpp
-index f1364df..d802f3f 100644
+index f1364df..ef0d099 100644
 --- a/src/mod-ollama-chat_dispatch.cpp
 +++ b/src/mod-ollama-chat_dispatch.cpp
 @@ -263,7 +263,13 @@ namespace
@@ -17,11 +74,277 @@ index f1364df..d802f3f 100644
                      return false;
  
                  // Checked before generating too; re-checked because the only
+@@ -381,6 +387,18 @@ namespace
+         Governor_RecordUtterance(botGuid, c.request.scopeKey, c.text);
+         ++g_totalDelivered;
+ 
++        // Shared context: this line is now part of what everyone in the scope
++        // is shown, and the bot and whoever it answered are engaged -- the
++        // next line from either is a turn in their exchange. Bots included:
++        // that is what lets two of them keep an argument going.
++        {
++            const std::string& ctxKey = c.request.contextKey.empty() ? c.request.scopeKey
++                                                                     : c.request.contextKey;
++            Governor_RecordTranscript(ctxKey, botGuid, bot->GetName(), true, c.text);
++            if (c.request.targetGuid)
++                Governor_NoteEngagement(botGuid, ObjectGuid(c.request.targetGuid), ctxKey);
++        }
++
+         // This bot is now in a conversation with whoever it just answered, so
+         // their next line in this scope is a turn in it rather than ambient
+         // chatter. Only against a real person: an open conversation bypasses
+diff --git a/src/mod-ollama-chat_dispatch.h b/src/mod-ollama-chat_dispatch.h
+index af5d2f3..a2cbdfa 100644
+--- a/src/mod-ollama-chat_dispatch.h
++++ b/src/mod-ollama-chat_dispatch.h
+@@ -63,6 +63,10 @@ struct OllamaChatRequest
+     // Direct address skips the pacing cooldowns and repetition suppression.
+     bool directAddress = false;
+ 
++    // Where the shared transcript for this exchange lives. Usually the scope
++    // key; a private pair key for whispers. Empty means "use scopeKey".
++    std::string contextKey;
++
+     // Generation.
+     std::string       prompt;
+     OllamaRequestKind kind = OllamaRequestKind::ChatReply;
+diff --git a/src/mod-ollama-chat_governor.cpp b/src/mod-ollama-chat_governor.cpp
+index 1df3854..3dd9e11 100644
+--- a/src/mod-ollama-chat_governor.cpp
++++ b/src/mod-ollama-chat_governor.cpp
+@@ -45,14 +45,29 @@ namespace
+         // the next thing that person says in that scope is a continuation, not
+         // ambient chatter, so it bypasses the pacing cooldowns.
+         std::unordered_map<uint64_t, std::unordered_map<std::string, TimePoint>> conversations;
++
++        // Who this participant is trading lines with (bot or person), per
++        // scope. Recorded for both sides when a reply is delivered.
++        std::unordered_map<uint64_t, std::unordered_map<std::string, TimePoint>> engaged;
++    };
++
++    struct TranscriptLine
++    {
++        uint64_t    guid;
++        std::string name;
++        bool        isBot;
++        std::string text;
++        TimePoint   when;
+     };
+ 
+     struct ScopeState
+     {
+         TimePoint             lastHuman{};
+         TimePoint             lastSend{};
++        TimePoint             lastLine{};       // last transcript line, by anyone
+         std::deque<Utterance> history;
+         std::deque<TimePoint> sendTimes;
++        std::deque<TranscriptLine> transcript;
+     };
+ 
+     std::unordered_map<uint64_t, BotState>    g_bots;
+@@ -335,6 +350,91 @@ bool Governor_InConversation(ObjectGuid botGuid, ObjectGuid playerGuid,
+     return SecondsSince(scopeIt->second, Clock::now()) <= double(g_ConversationWindowSeconds);
+ }
+ 
++// --- scope transcript and engagement (solo-azeroth) -----------------------
++
++void Governor_RecordTranscript(const std::string& scopeKey, ObjectGuid speaker,
++                               const std::string& speakerName, bool speakerIsBot,
++                               const std::string& text)
++{
++    if (text.empty() || g_TranscriptLines == 0)
++        return;
++
++    TranscriptLine line;
++    line.guid  = speaker.GetRawValue();
++    line.name  = speakerName;
++    line.isBot = speakerIsBot;
++    line.text  = text.size() > 220 ? text.substr(0, 220) : text;
++    line.when  = Clock::now();
++
++    std::lock_guard<std::mutex> lock(g_mutex);
++    ScopeState& scope = g_scopes[scopeKey];
++    scope.lastLine = line.when;
++    scope.transcript.push_back(std::move(line));
++    while (scope.transcript.size() > g_TranscriptLines)
++        scope.transcript.pop_front();
++}
++
++std::string Governor_TranscriptText(const std::string& scopeKey)
++{
++    std::lock_guard<std::mutex> lock(g_mutex);
++    auto it = g_scopes.find(scopeKey);
++    if (it == g_scopes.end())
++        return std::string();
++
++    const TimePoint now = Clock::now();
++    std::string out;
++    for (const TranscriptLine& line : it->second.transcript)
++    {
++        if (SecondsSince(line.when, now) > double(g_TranscriptWindowSeconds))
++            continue;
++        out += line.name;
++        out += ": ";
++        out += line.text;
++        out += '\n';
++    }
++    if (!out.empty())
++        out.pop_back();
++    return out;
++}
++
++double Governor_ScopeIdleSeconds(const std::string& scopeKey)
++{
++    std::lock_guard<std::mutex> lock(g_mutex);
++    auto it = g_scopes.find(scopeKey);
++    if (it == g_scopes.end())
++        return 1e9;
++    return SecondsSince(it->second.lastLine, Clock::now());
++}
++
++void Governor_NoteEngagement(ObjectGuid a, ObjectGuid b, const std::string& scopeKey)
++{
++    if (!a || !b || a == b || g_EngagedWindowSeconds == 0)
++        return;
++
++    const TimePoint now = Clock::now();
++    std::lock_guard<std::mutex> lock(g_mutex);
++    g_bots[a.GetRawValue()].engaged[b.GetRawValue()][scopeKey] = now;
++    g_bots[b.GetRawValue()].engaged[a.GetRawValue()][scopeKey] = now;
++}
++
++bool Governor_Engaged(ObjectGuid a, ObjectGuid b, const std::string& scopeKey)
++{
++    if (!a || !b || g_EngagedWindowSeconds == 0)
++        return false;
++
++    std::lock_guard<std::mutex> lock(g_mutex);
++    auto botIt = g_bots.find(a.GetRawValue());
++    if (botIt == g_bots.end())
++        return false;
++    auto otherIt = botIt->second.engaged.find(b.GetRawValue());
++    if (otherIt == botIt->second.engaged.end())
++        return false;
++    auto scopeIt = otherIt->second.find(scopeKey);
++    if (scopeIt == otherIt->second.end())
++        return false;
++    return SecondsSince(scopeIt->second, Clock::now()) <= double(g_EngagedWindowSeconds);
++}
++
+ // --- cooldowns and rate limits -------------------------------------------
+ 
+ namespace
+@@ -604,7 +704,11 @@ void Governor_Update()
+                SecondsSince(s.history.front().when, now) > double(g_RepetitionWindowSeconds))
+             s.history.pop_front();
+ 
+-        const bool idle = s.history.empty() && s.sendTimes.empty() &&
++        while (!s.transcript.empty() &&
++               SecondsSince(s.transcript.front().when, now) > double(g_TranscriptWindowSeconds))
++            s.transcript.pop_front();
++
++        const bool idle = s.history.empty() && s.sendTimes.empty() && s.transcript.empty() &&
+                           SecondsSince(s.lastHuman, now) > staleAfter &&
+                           SecondsSince(s.lastSend, now)  > staleAfter;
+ 
+@@ -631,6 +735,16 @@ void Governor_Update()
+ 
+             pit = pit->second.empty() ? bot.conversations.erase(pit) : std::next(pit);
+         }
++
++        for (auto pit = bot.engaged.begin(); pit != bot.engaged.end(); )
++        {
++            for (auto sit = pit->second.begin(); sit != pit->second.end(); )
++                sit = (SecondsSince(sit->second, now) > double(g_EngagedWindowSeconds))
++                          ? pit->second.erase(sit)
++                          : std::next(sit);
++
++            pit = pit->second.empty() ? bot.engaged.erase(pit) : std::next(pit);
++        }
+     }
+ 
+     g_stats.trackedBots   = static_cast<uint32_t>(g_bots.size());
+diff --git a/src/mod-ollama-chat_governor.h b/src/mod-ollama-chat_governor.h
+index 5f5611d..b61a0ff 100644
+--- a/src/mod-ollama-chat_governor.h
++++ b/src/mod-ollama-chat_governor.h
+@@ -91,6 +91,30 @@ bool Governor_TryConsumeEmoteReaction(ObjectGuid botGuid, ObjectGuid playerGuid)
+ // cooldown when the event is actually committed.
+ bool Governor_TryConsumeEventCooldown(ObjectGuid botGuid);
+ 
++// --- scope transcript and engagement (solo-azeroth) -----------------------
++
++// Every line said in a scope, by anyone, with the speaker's name: the shared
++// context a replying bot is shown, so it answers what was actually said and
++// knows who said it. Human lines are recorded in ProcessChat, bot lines at
++// delivery. Whispers use a private pair key instead of the zone scope.
++void Governor_RecordTranscript(const std::string& scopeKey, ObjectGuid speaker,
++                               const std::string& speakerName, bool speakerIsBot,
++                               const std::string& text);
++
++// Oldest first, one "Name: text" per line, at most g_TranscriptLines lines
++// said within g_TranscriptWindowSeconds. Empty when nothing was said.
++std::string Governor_TranscriptText(const std::string& scopeKey);
++
++// Seconds since anyone (bot or person) last said something here; huge if never.
++double Governor_ScopeIdleSeconds(const std::string& scopeKey);
++
++// Two participants who answered each other recently are engaged: the next
++// line from one is a turn aimed at the other, whoever they are. This is what
++// lets two bots keep an argument going and what makes the bot you are
++// talking to answer you instead of a random bystander. Symmetric.
++void Governor_NoteEngagement(ObjectGuid a, ObjectGuid b, const std::string& scopeKey);
++bool Governor_Engaged(ObjectGuid a, ObjectGuid b, const std::string& scopeKey);
++
+ // --- maintenance ----------------------------------------------------------
+ 
+ void Governor_OnPlayerLogout(ObjectGuid guid);
 diff --git a/src/mod-ollama-chat_handler.cpp b/src/mod-ollama-chat_handler.cpp
-index 264d845..02f6874 100644
+index 264d845..980b397 100644
 --- a/src/mod-ollama-chat_handler.cpp
 +++ b/src/mod-ollama-chat_handler.cpp
-@@ -1357,7 +1357,9 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
+@@ -126,8 +126,14 @@ static bool OllamaIsDirectAddress(Player* bot, Player* speaker, ChatChannelSourc
+     if (OllamaFindBotNameMention(msg, bot->GetName()) != std::string::npos)
+         return true;
+ 
++    // Someone this bot has been trading lines with here -- person or bot. The
++    // reply it owes is what keeps an argument going instead of dying after
++    // one exchange. Chain depth still bounds a bot-to-bot run.
++    if (speaker && Governor_Engaged(bot->GetGUID(), speaker->GetGUID(), scopeKey))
++        return true;
++
+     if (senderIsBot)
+-        return false;   // only a person's turn obliges an answer
++        return false;   // otherwise only a person's turn obliges an answer
+ 
+     // Already talking to this person here.
+     if (speaker && Governor_InConversation(bot->GetGUID(), speaker->GetGUID(), scopeKey))
+@@ -1198,11 +1204,24 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
+             ? player->GetGuildId() : 0,
+         scopeGroupOrZone);
+ 
++    // Where the shared transcript of this exchange lives: the scope, except
++    // for whispers, which get a private key for the pair so one whisper
++    // thread never leaks into another.
++    std::string contextKey = scopeKey;
++    if (sourceLocal == SRC_WHISPER_LOCAL && receiver)
++    {
++        const uint64_t a = player->GetGUID().GetRawValue();
++        const uint64_t b = receiver->GetGUID().GetRawValue();
++        contextKey = "Whisper#" + std::to_string(std::min(a, b)) + ":" + std::to_string(std::max(a, b));
++    }
++
+     if (!senderIsBot)
+     {
+         // A real player spoke here. This timestamp is what lets bots keep
+         // talking to each other for a while afterwards.
+         Governor_NoteHumanMessage(scopeKey);
++        // Bot lines enter the transcript at delivery; a person's line enters here.
++        Governor_RecordTranscript(contextKey, player->GetGUID(), player->GetName(), false, trimmedMsg);
+     }
+     else
+     {
+@@ -1357,7 +1376,9 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
              // membership alone decides, which is checked below.
              
              // CHANNEL MEMBERSHIP CHECK: Bot must actually be in the channel
@@ -32,8 +355,184 @@ index 264d845..02f6874 100644
              {
                  if(g_DebugEnabled)
                  {
+@@ -1555,7 +1576,8 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
+         return;
+     
+     std::vector<Player*> finalCandidates;
+-    
++    std::vector<Player*> addressedBots;   // the subset of finalCandidates this line is aimed at
++
+     // For whispers, handle directly - there should only be one receiver bot
+     if (sourceLocal == SRC_WHISPER_LOCAL)
+     {
+@@ -1565,6 +1587,7 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
+             if (!(g_DisableRepliesInCombat && whisperBot->IsInCombat()))
+             {
+                 finalCandidates.push_back(whisperBot);
++                addressedBots.push_back(whisperBot);
+                 if(g_DebugEnabled)
+                 {
+                     LOG_INFO("module.ollamachat", "[Ollama Chat] Whisper: Bot {} selected to respond", whisperBot->GetName());
+@@ -1622,6 +1645,7 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
+             if (!(g_DisableRepliesInCombat && chosen->IsInCombat()))
+             {
+                 finalCandidates.push_back(chosen);
++                addressedBots.push_back(chosen);
+                 if(g_DebugEnabled)
+                 {
+                     LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} selected (mentioned first at position {})", 
+@@ -1662,6 +1686,8 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
+                 if (roll < botChance)
+                 {
+                     finalCandidates.push_back(bot);
++                    if (botIsAddressed)
++                        addressedBots.push_back(bot);
+                     if(g_DebugEnabled)
+                     {
+                         LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} PASSED chance roll ({} < {}%{})", bot->GetName(), roll, botChance, botIsAddressed ? ", addressed" : "");
+@@ -1692,17 +1718,43 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
+         return;
+     }
+     
+-    if (finalCandidates.size() > g_MaxBotsToPick)
++    // Whoever the line is aimed at answers first; the crowd only fills what is
++    // left. Before this, a bot mid-argument with you rolled its 95% and was
++    // then shuffled in with eighteen bystanders at 70%, so the answer usually
++    // came from someone who had not been part of the exchange at all.
+     {
+         std::random_device rd;
+         std::mt19937 g(rd());
+-        std::shuffle(finalCandidates.begin(), finalCandidates.end(), g);
+-        uint32_t countToPick = urand(1, g_MaxBotsToPick);
+-        if(g_DebugEnabled)
++
++        std::vector<Player*> picked = addressedBots;
++        std::shuffle(picked.begin(), picked.end(), g);
++        if (picked.size() > g_MaxBotsToPick)
++            picked.resize(g_MaxBotsToPick);
++
++        std::vector<Player*> others;
++        for (Player* bot : finalCandidates)
++            if (std::find(addressedBots.begin(), addressedBots.end(), bot) == addressedBots.end())
++                others.push_back(bot);
++        std::shuffle(others.begin(), others.end(), g);
++
++        uint32_t room = g_MaxBotsToPick > picked.size() ? g_MaxBotsToPick - uint32_t(picked.size()) : 0;
++        if (!addressedBots.empty())
+         {
+-            LOG_INFO("module.ollamachat", "[Ollama Chat] Limiting {} bots to {} (MaxBotsToPick)", finalCandidates.size(), countToPick);
++            // A crowd does not pile onto someone else's exchange: at most one
++            // bystander, and only sometimes.
++            room = (room > 0 && urand(0, 99) < 35) ? 1 : 0;
+         }
+-        finalCandidates.resize(countToPick);
++        else if (room > 1)
++        {
++            room = urand(1, room);
++        }
++        for (uint32_t i = 0; i < room && i < others.size(); ++i)
++            picked.push_back(others[i]);
++
++        if (g_DebugEnabled && picked.size() != finalCandidates.size())
++            LOG_INFO("module.ollamachat", "[Ollama Chat] Limiting {} bots to {} ({} addressed, MaxBotsToPick {})",
++                     finalCandidates.size(), picked.size(), addressedBots.size(), g_MaxBotsToPick);
++        finalCandidates = std::move(picked);
+     }
+     
+     if(g_DebugEnabled && !finalCandidates.empty())
+@@ -1741,7 +1793,7 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
+             continue;
+         }
+ 
+-        std::string prompt = GenerateBotPrompt(bot, msg, player);
++        std::string prompt = GenerateBotPrompt(bot, msg, player, directAddress, contextKey);
+         if (prompt.empty())
+             continue;
+ 
+@@ -1754,6 +1806,7 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
+         request.chainDepth  = chainDepth;
+         request.directAddress = directAddress;
+         request.scopeKey    = scopeKey;
++        request.contextKey  = contextKey;
+         request.prompt      = std::move(prompt);
+         request.botName     = bot->GetName();
+         request.originMessage = msg;
+@@ -1900,8 +1953,9 @@ static bool IsBotEligibleForChatChannelLocal(Player* bot, Player* player, ChatCh
+     }
+ }
+ 
+-std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* player)
+-{  
++std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* player,
++                              bool directAddress, const std::string& contextKey)
++{
+     if (!bot || !player) {
+         return "";
+     }
+@@ -1957,6 +2011,17 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
+     std::string chatHistory         = GetBotHistoryPrompt(botGuid, playerGuid, playerMessage);
+     std::string sentimentInfo       = GetSentimentPromptAddition(bot, player);
+ 
++    // The shared transcript of this scope (the line being answered is its
++    // last entry), whether the line is aimed at this bot, and what the bot
++    // remembers -- all available to the template, so the facts can come
++    // before the instruction instead of being appended after it.
++    std::string transcript          = contextKey.empty() ? std::string() : Governor_TranscriptText(contextKey);
++    std::string addressed           = directAddress
++                                        ? SafeFormat(g_AddressedTemplate, fmt::arg("bot_name", botName), fmt::arg("player_name", playerName))
++                                        : std::string();
++    std::string memoryInfo          = Memory_BuildPromptSection(bot, player);
++    const bool templateHasMemory    = g_ChatPromptTemplate.find("{memory_info}") != std::string::npos;
++
+     // Retrieve RAG information if enabled
+     std::string ragInfo;
+     if (g_EnableRAG && g_RAGSystem) {
+@@ -2009,7 +2074,17 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
+         fmt::arg("player_message", playerMessage),
+         fmt::arg("extra_info", extraInfo),
+         fmt::arg("chat_history", chatHistory),
+-        fmt::arg("sentiment_info", sentimentInfo)
++        fmt::arg("sentiment_info", sentimentInfo),
++        fmt::arg("transcript", transcript),
++        fmt::arg("addressed", addressed),
++        fmt::arg("memory_info", memoryInfo),
++        fmt::arg("bot_race", botRace),
++        fmt::arg("bot_gender", botGender),
++        fmt::arg("bot_role", botRole),
++        fmt::arg("bot_faction", botFaction),
++        fmt::arg("bot_area", botAreaName),
++        fmt::arg("bot_zone", botZoneName),
++        fmt::arg("bot_map", botMapName)
+     );
+ 
+     // Add RAG information to the prompt if available
+@@ -2024,7 +2099,9 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
+ 
+     // What this bot remembers, and how it feels about people. Bounded by
+     // their own token budgets, so this cannot grow the prompt without limit.
+-    prompt += Memory_BuildPromptSection(bot, player);
++    // Appended only when the template did not place it itself.
++    if (!templateHasMemory)
++        prompt += memoryInfo;
+ 
+     // Race and class as a voice rather than as a stat line.
+     prompt += Roleplay_BuildVoicePrompt(bot);
+diff --git a/src/mod-ollama-chat_handler.h b/src/mod-ollama-chat_handler.h
+index 75b1e48..3395264 100644
+--- a/src/mod-ollama-chat_handler.h
++++ b/src/mod-ollama-chat_handler.h
+@@ -41,7 +41,8 @@ void AppendBotConversation(uint64_t botGuid, uint64_t playerGuid,
+                            const std::string& playerMessage, const std::string& botReply);
+ 
+ // Prompt builders. World thread only -- they read live world state.
+-std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* player);
++std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* player,
++                              bool directAddress = false, const std::string& contextKey = std::string());
+ std::string BuildEmoteReactionPrompt(Player* bot, Player* player, uint32_t textEmote);
+ 
+ // Bounded, distance-sorted snapshot helpers used by the prompt builders and
 diff --git a/src/mod-ollama-chat_random.cpp b/src/mod-ollama-chat_random.cpp
-index 710070b..4568060 100644
+index 710070b..aacece2 100644
 --- a/src/mod-ollama-chat_random.cpp
 +++ b/src/mod-ollama-chat_random.cpp
 @@ -86,7 +86,10 @@ namespace
@@ -62,7 +561,48 @@ index 710070b..4568060 100644
          }
  
          if (options.empty())
-@@ -278,7 +281,12 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+@@ -129,7 +132,8 @@ namespace
+         return true;
+     }
+ 
+-    std::string BuildRandomChatterPrompt(Player* bot, const std::string& environmentInfo)
++    std::string BuildRandomChatterPrompt(Player* bot, const std::string& environmentInfo,
++                                         const std::string& scopeKey, bool scopeLive)
+     {
+         PlayerbotAI* botAI = PlayerbotsMgr::instance().GetPlayerbotAI(bot);
+         if (!botAI || !botAI->GetChatHelper())
+@@ -155,7 +159,19 @@ namespace
+             fmt::arg("bot_map", OllamaContinentName(bot)),
+             fmt::arg("bot_personality", personalityPrompt),
+             fmt::arg("bot_personality_name", personality),
+-            fmt::arg("environment_info", environmentInfo));
++            fmt::arg("environment_info", environmentInfo),
++            fmt::arg("transcript", Governor_TranscriptText(scopeKey)),
++            fmt::arg("memory_info", Memory_BuildPromptSection(bot, nullptr)));
++
++        // A live conversation in this scope: the line joins it instead of
++        // dropping a random topic into the middle of it.
++        if (scopeLive && !g_AmbientJoinLine.empty())
++        {
++            prompt += " " + g_AmbientJoinLine;
++            prompt += Roleplay_BuildVoicePrompt(bot);
++            prompt += Expression_BuildGesturePrompt();
++            return prompt;
++        }
+ 
+         // Statement or question. At roleplay strictness 2 the in-character
+         // lists replace the shipped ones, which otherwise push bots toward
+@@ -185,7 +201,8 @@ namespace
+             prompt += " " + questions[PickIndex(questions.size())];
+         }
+ 
+-        prompt += Memory_BuildPromptSection(bot, nullptr);
++        if (g_RandomChatterPromptTemplate.find("{memory_info}") == std::string::npos)
++            prompt += Memory_BuildPromptSection(bot, nullptr);
+         prompt += Roleplay_BuildVoicePrompt(bot);
+         prompt += Expression_BuildGesturePrompt();
+ 
+@@ -278,7 +295,12 @@ void OllamaBotRandomChatter::HandleRandomChatter()
      world.Build();
  
      if (world.Empty())
@@ -75,7 +615,7 @@ index 710070b..4568060 100644
  
      auto const& allPlayers = ObjectAccessor::GetPlayers();
  
-@@ -294,6 +302,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+@@ -294,6 +316,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
          if (!ai || !ai->IsBotAI())
              continue;
  
@@ -83,7 +623,7 @@ index 710070b..4568060 100644
          if (g_DisableRepliesInCombat && bot->IsInCombat())
              continue;
  
-@@ -307,6 +316,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+@@ -307,6 +330,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
  
          if (!guildAudience && !nearRealPlayer)
              continue;
@@ -91,7 +631,7 @@ index 710070b..4568060 100644
  
          // Schedule.
          {
-@@ -320,6 +330,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+@@ -320,6 +344,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
              if (now < it->second)
                  continue;
          }
@@ -99,7 +639,7 @@ index 710070b..4568060 100644
  
          auto reschedule = [&]()
          {
-@@ -332,6 +343,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+@@ -332,6 +357,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
              reschedule();
              continue;
          }
@@ -107,7 +647,7 @@ index 710070b..4568060 100644
  
          // Pick what to talk about. Weighted toward the people and the world
          // around the bot rather than its own inventory.
-@@ -341,6 +353,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+@@ -341,6 +367,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
              reschedule();
              continue;
          }
@@ -115,7 +655,7 @@ index 710070b..4568060 100644
  
          ChatChannelSourceLocal source = SRC_SAY_LOCAL;
          std::string channelName;
-@@ -354,6 +367,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+@@ -354,6 +381,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
              reschedule();
              continue;
          }
@@ -123,15 +663,33 @@ index 710070b..4568060 100644
  
          // Same inputs the reply path uses, so ambient lines and replies in the
          // same channel share one cooldown, rate limit and repetition history.
-@@ -368,6 +382,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+@@ -363,13 +391,24 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+             source == SRC_GUILD_LOCAL ? bot->GetGuildId() : 0,
+             bot->GetZoneId());
+ 
++        // A scope where something was just said is live. Ambient lines mostly
++        // stay out of it -- they used to derail arguments with "anyone farming
++        // badges?" -- and the few that get through are told to join in.
++        const bool scopeLive = Governor_ScopeIdleSeconds(scopeKey) < double(g_AmbientHoldSeconds);
++        if (scopeLive && urand(0, 99) >= g_AmbientHoldPassPct)
++        {
++            reschedule();
++            continue;
++        }
++
+         if (!Governor_CanSend(bot->GetGUID(), scopeKey))
+         {
              reschedule();
              continue;
          }
 +        ++cGov;
  
-         std::string prompt = BuildRandomChatterPrompt(bot, topic.text);
+-        std::string prompt = BuildRandomChatterPrompt(bot, topic.text);
++        std::string prompt = BuildRandomChatterPrompt(bot, topic.text, scopeKey, scopeLive);
          if (prompt.empty())
-@@ -390,8 +405,16 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+         {
+             reschedule();
+@@ -390,8 +429,16 @@ void OllamaBotRandomChatter::HandleRandomChatter()
          request.triggerBotReplies = true;
  
          if (OllamaDispatch_Submit(std::move(request)))
