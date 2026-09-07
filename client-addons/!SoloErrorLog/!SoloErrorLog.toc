@@ -1,0 +1,5 @@
+## Interface: 30300
+## Title: SoloErrorLog
+## Notes: Records every Lua error (message + stack) into SavedVariables so it can be read outside the game.
+## SavedVariables: SoloErrorLogDB
+SoloErrorLog.lua

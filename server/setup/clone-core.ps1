@@ -18,6 +18,9 @@ if (Test-Path $patch) {
     if ($LASTEXITCODE -eq 0) { git -C "$core\modules\mod-ollama-chat" apply $patch; Write-Host "applied patches\mod-ollama-chat-solo.diff" }
     else { Write-Host "patches\mod-ollama-chat-solo.diff did not apply cleanly (already applied, or upstream changed) - check manually" -ForegroundColor Yellow }
 }
+# our own module (GM Toolkit, XP potions) lives in server\modules\mod-solo; link it in so the core's CMake builds it
+$link = "$core\modules\mod-solo"
+if (-not (Test-Path $link)) { New-Item -ItemType Junction -Path $link -Target "$server\modules\mod-solo" | Out-Null; Write-Host "linked modules\mod-solo" }
 Write-Host "core:            $(git -C $core log --oneline -1)"
 Write-Host "mod-playerbots:  $(git -C "$core\modules\mod-playerbots" log --oneline -1)"
 Write-Host "mod-ollama-chat: $(git -C "$core\modules\mod-ollama-chat" log --oneline -1)"

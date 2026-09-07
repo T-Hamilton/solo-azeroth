@@ -148,7 +148,15 @@ then `.\solo.cmd configs` and restart. Any model on ollama.com works.
 Commands, from `server\`: `solo.cmd status`, `solo.cmd configs` (after editing `settings.local.json`),
 `solo.cmd personalities --reroll` (make every bot pick a personality again), `solo.cmd stop`.
 
-In game, as GM: `.ollama status` (is the chat engine alive), `.ollama test hello` (one raw prompt, answer in the
+In game you are a GM. A **GM Toolkit** is put in your bags when you log in (GM accounts only). Right-click it:
+teleports (cities, starting zones, dungeons and raids, back to where I was), GM powers (god, no cast time, no
+cooldowns, infinite power, fly, speed, water walking, GM mode, visibility, all flight paths, explore all, and an
+everything-on / everything-off switch) and character helpers (heal, revive, clear cooldowns, level +1/+5/+10, max
+weapon skills, repair, 100 gold, 5 Potions of Experience). A **Potion of Experience** gives +100% experience from
+every source for one hour; each extra potion adds another +100% (up to five) and restarts the hour. Lost the
+toolkit? Relog. More potions: the toolkit, or `.additem 2461 5`.
+
+Commands, as GM: `.ollama status` (is the chat engine alive), `.ollama test hello` (one raw prompt, answer in the
 server console), `.ollama reload` (after changing chat settings), `.playerbots bot add <name>` (take a bot into your
 party), `.gm on`, `.tele orgrimmar`, `.modify speed 3`.
 
@@ -182,7 +190,7 @@ the realmlist and an account.
 | Bots talk to each other but never to you | you aren't in the channel they use | `/join General`, `/join LookingForGroup` |
 | `.ollama status` shows failures, "Last error" set | Ollama isn't running or the model isn't pulled | `solo.cmd ollama` |
 | Everything is slow, replies take 10+ s | model doesn't fit in VRAM and spills to CPU | pick a smaller model (`ollama list` shows sizes) |
-| Lua errors in game | an addon written for another client | the `SoloErrorLog` addon records them; `/errs` in game, or read `WTF\Account\<you>\SavedVariables\SoloErrorLog.lua` |
+| Lua errors in game | an addon written for another client | copy `client-addons\!SoloErrorLog` into your client's `Interface\AddOns`: it records every error; `/errs` in game, or read `WTF\Account\<you>\SavedVariables\SoloErrorLog.lua` after you log out |
 | Two servers on one PC fight over ports | both use 3306/3724/8085 | give this one different `MySQLPort`, `AuthPort`, `WorldPort`, `SoapPort` in `settings.local.json` |
 
 Still stuck: `setup\first_start.log` (first boot), `runtime\logs\Server.log` (world), `runtime\logs\Auth.log`

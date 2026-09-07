@@ -95,20 +95,30 @@ function Install-PersonalityPacks {
     Get-ChildItem "$($S.ServerDir)\personalities\*.sql" -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName $dst -Force; Write-Host "personality pack: $($_.Name)" }
 }
 
+function Install-ModuleSql {
+    # mod-solo's world-database rows (GM Toolkit, Potion of Experience): idempotent UPDATEs, applied on every start
+    if (-not (Listening $S.MySQLPort)) { return }
+    $env:MYSQL_PWD = $S.DbPassword
+    Get-ChildItem "$($S.ServerDir)\modules\mod-solo\sql\world\*.sql" -ErrorAction SilentlyContinue | ForEach-Object {
+        Get-Content $_.FullName -Raw | & "$($S.MySQLBin)\mysql.exe" "--user=$($S.DbUser)" "--host=127.0.0.1" "--port=$($S.MySQLPort)" "--database=$($S.DbPrefix)_world" 2>$null
+        if ($LASTEXITCODE -eq 0) { Write-Host "mod-solo sql: $($_.Name)" } else { Write-Host "mod-solo sql: $($_.Name) not applied (world DB not populated until the first worldserver boot)" }
+    }
+}
+
 switch ($cmd) {
     "mysql"   { Start-MySQL }
     "ollama"  { Start-Ollama }
-    "configs" { & $Py "$($S.ServerDir)\setup\gen_configs.py"; Install-PersonalityPacks; Start-MySQL; Sync-Realmlist }
+    "configs" { & $Py "$($S.ServerDir)\setup\gen_configs.py"; Install-PersonalityPacks; Start-MySQL; Sync-Realmlist; Install-ModuleSql }
     "first-run" {
         & powershell -NoProfile -ExecutionPolicy Bypass -File "$($S.ServerDir)\setup\init-db.ps1"
         if (-not $?) { Write-Host "database setup failed"; exit 1 }
         & $Py "$($S.ServerDir)\setup\gen_configs.py"; Install-PersonalityPacks
         Write-Host "First worldserver boot: imports the world database (several minutes) and creates account '$($S.Account)'..."
         & $Py "$($S.ServerDir)\setup\first_start.py"
-        Sync-Realmlist
+        Sync-Realmlist; Install-ModuleSql
         Write-Host "Done. Next:  .\solo.cmd shortcuts   then double-click 'Solo Azeroth - Play' on your Desktop."
     }
-    "start"   { Start-MySQL; Sync-Realmlist; Start-Ollama; Start-Auth; Start-World }
+    "start"   { Start-MySQL; Sync-Realmlist; Install-ModuleSql; Start-Ollama; Start-Auth; Start-World }
     "stop" {
         foreach ($n in "worldserver", "authserver") {
             Get-Process $n -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$Runtime*" } | ForEach-Object { Write-Host "stopping $n ($($_.Id))"; $_.CloseMainWindow() | Out-Null }
