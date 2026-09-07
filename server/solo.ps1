@@ -70,7 +70,7 @@ function Sync-Realmlist {
     if (-not (Listening $S.MySQLPort)) { return }
     $sql = "UPDATE realmlist SET name='$($S.RealmName)', address='$($S.RealmAddress)', localAddress='127.0.0.1', port=$($S.WorldPort) WHERE id=1;"
     & "$($S.MySQLBin)\mysql.exe" "--user=$($S.DbUser)" "--password=$($S.DbPassword)" "--host=127.0.0.1" "--port=$($S.MySQLPort)" "--database=$($S.DbPrefix)_auth" "--execute=$sql" 2>$null
-    if ($?) { Write-Host "realmlist: '$($S.RealmName)' -> $($S.RealmAddress):$($S.WorldPort)" }
+    if ($?) { Write-Host "realmlist: '$($S.RealmName)' -> $($S.RealmAddress):$($S.WorldPort)" } else { Write-Host "realmlist: not updated yet (auth DB not populated until the first worldserver boot)" }
 }
 
 function Install-PersonalityPacks {
@@ -83,7 +83,7 @@ function Install-PersonalityPacks {
 switch ($cmd) {
     "mysql"   { Start-MySQL }
     "ollama"  { Start-Ollama }
-    "configs" { & $Py "$($S.ServerDir)\setup\gen_configs.py"; Install-PersonalityPacks; Sync-Realmlist }
+    "configs" { & $Py "$($S.ServerDir)\setup\gen_configs.py"; Install-PersonalityPacks; Start-MySQL; Sync-Realmlist }
     "first-run" {
         & powershell -NoProfile -ExecutionPolicy Bypass -File "$($S.ServerDir)\setup\init-db.ps1"
         if (-not $?) { Write-Host "database setup failed"; exit 1 }
@@ -93,7 +93,7 @@ switch ($cmd) {
         Sync-Realmlist
         Write-Host "Done. Next:  .\solo.cmd shortcuts   then double-click 'Solo Azeroth - Play' on your Desktop."
     }
-    "start"   { Start-MySQL; Start-Ollama; Start-Auth; Start-World }
+    "start"   { Start-MySQL; Sync-Realmlist; Start-Ollama; Start-Auth; Start-World }
     "stop" {
         foreach ($n in "worldserver", "authserver") {
             Get-Process $n -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$Runtime*" } | ForEach-Object { Write-Host "stopping $n ($($_.Id))"; $_.CloseMainWindow() | Out-Null }
