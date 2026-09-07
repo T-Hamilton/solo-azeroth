@@ -17,6 +17,14 @@ for anything specific to your install (toggling patch MPQs, launching an addon m
 
 Log in with the account and password from your settings. The account has GM level 3.
 
+## If your client is a copy of an Ascension install
+
+That client's class tables list 32 classes and its addons are Ascension's forks, so three extra things apply:
+`client-patches/README.md` explains the stock-only `patch-Z.MPQ` that gives you the plain 10-class creation screen;
+Ascension's ElvUI (7.x) doesn't run on a stock server, the standard ElvUI-WotLK 6.09 from
+github.com/ElvUI-WotLK/ElvUI does; and the item display ids in the world database must be swapped for Ascension's
+numbering (`SUMMARY.md`, "Local-only"). A real stock 3.3.5a client needs none of this.
+
 ## Ports
 
 | Service | Default | Setting |
@@ -51,3 +59,4 @@ The `Play` shortcut on this PC keeps working with a LAN address in `RealmAddress
 | world data | `server\runtime\data\{dbc,maps,vmaps,mmaps}` |
 | MySQL data | `server\mysql\data`, root has no password (bound to 127.0.0.1 only); app user from settings |
 | first-boot log | `server\setup\first_start.log` |
+| Lua errors from the game | `Interface\AddOns\SoloErrorLog` records them; `/errs` in game or `WTF\Account\<acct>\SavedVariables\SoloErrorLog.lua` |

@@ -86,9 +86,25 @@ so the LLM is not burning power for an empty world.
 Quieter: drop `RandomChatterBotCommentChance` to 8 and `BotReplyChance.Channel` to 15. Louder: raise the two
 rate limits first, they are the ceiling.
 
+## What we had to fix in the module
+
+Three things in mod-ollama-chat kept every bot silent on a fresh install; the fixes live in
+`server\patches\mod-ollama-chat-solo.diff` and `clone-core.ps1` applies them:
+
+- Bots join the General channel of the zone they log in to and never re-join as they travel. The module only let a
+  bot reply if it was a member of your exact zone channel, so the crowd around you was ineligible. Now same-zone
+  bots are eligible and get joined to the channel when they speak.
+- The realm-wide LFG feed was gated on a bot being in your zone. Now any real player in that channel is an audience.
+- With `"ChatDebug": 1` in `settings.local.json` the world log prints a funnel summary every 30 s
+  (`ambient tick: bots= audience= due= rolled= topic= destination= governor= submitted=`) and every reply decision.
+
+And one thing in our own config: `AiPlayerbot.SelfBotLevel` must stay at 1. At 3 the real player's character gets a
+bot AI attached on login, the module counts them as a bot, and nothing is ever said.
+
 ## Diagnosing "the bots are not talking"
 
-- `.ollama status` in game: endpoint, model, queue depth, delivered and dropped counters.
+- `.ollama status` in game: endpoint, model, queue depth, delivered and dropped counters. `0 submitted` after a few
+  minutes with you standing among bots means the module doesn't see you as a real player: check SelfBotLevel.
 - `.ollama test say something rude about mages`: one raw prompt straight to the model; the reply is printed to
   the server console and log.
 - `solo.cmd status`: is Ollama listening? `ollama list` in a terminal: is the model pulled?
