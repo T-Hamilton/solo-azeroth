@@ -59,4 +59,5 @@ The `Play` shortcut on this PC keeps working with a LAN address in `RealmAddress
 | world data | `server\runtime\data\{dbc,maps,vmaps,mmaps}` |
 | MySQL data | `server\mysql\data`, root has no password (bound to 127.0.0.1 only); app user from settings |
 | first-boot log | `server\setup\first_start.log` |
+| Addons from the Ascension copy that error at login (TomTom, WeakAuras 5.x, AtlasLoot 7.x, CoADump, CoA_PowerBars) | they are Ascension's retail-API backports and need its client Lua; parked in `Interface\AddOns.ascension-backup` on 2026-09-07. Use 3.3.5-era builds instead (WeakAuras-WotLK, TomTom 3.3.5, AtlasLoot Enhanced 5.x) |
 | Lua errors from the game | `Interface\AddOns\SoloErrorLog` records them; `/errs` in game or `WTF\Account\<acct>\SavedVariables\SoloErrorLog.lua` |
