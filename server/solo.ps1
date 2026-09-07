@@ -69,8 +69,9 @@ function Sync-Realmlist {
     # keep the realm row in the auth DB in step with settings (name / address / port)
     if (-not (Listening $S.MySQLPort)) { return }
     $sql = "UPDATE realmlist SET name='$($S.RealmName)', address='$($S.RealmAddress)', localAddress='127.0.0.1', port=$($S.WorldPort) WHERE id=1;"
-    & "$($S.MySQLBin)\mysql.exe" "--user=$($S.DbUser)" "--password=$($S.DbPassword)" "--host=127.0.0.1" "--port=$($S.MySQLPort)" "--database=$($S.DbPrefix)_auth" "--execute=$sql" 2>$null
-    if ($?) { Write-Host "realmlist: '$($S.RealmName)' -> $($S.RealmAddress):$($S.WorldPort)" } else { Write-Host "realmlist: not updated yet (auth DB not populated until the first worldserver boot)" }
+    $env:MYSQL_PWD = $S.DbPassword    # env var instead of --password: no stderr warning, and $LASTEXITCODE stays meaningful
+    & "$($S.MySQLBin)\mysql.exe" "--user=$($S.DbUser)" "--host=127.0.0.1" "--port=$($S.MySQLPort)" "--database=$($S.DbPrefix)_auth" "--execute=$sql" 2>$null
+    if ($LASTEXITCODE -eq 0) { Write-Host "realmlist: '$($S.RealmName)' -> $($S.RealmAddress):$($S.WorldPort)" } else { Write-Host "realmlist: not updated yet (auth DB not populated until the first worldserver boot)" }
 }
 
 function Install-PersonalityPacks {
