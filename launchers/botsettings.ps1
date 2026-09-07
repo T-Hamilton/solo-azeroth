@@ -21,6 +21,7 @@ $settings = @(
     @("bots", "AiPlayerbot.RandomBotJoinLfg",          "Bots use the dungeon finder",                      "bool", ""),
     @("bots", "AiPlayerbot.RandomBotGroupNearby",      "Bots may invite you to group",                     "bool", ""),
     @("bots", "AiPlayerbot.RandomBotTalk",             "Scripted one-liners (non-LLM)",                    "bool", "the canned playerbots chatter; the LLM still replies to it"),
+    @("bots", "AiPlayerbot.SelfBotLevel",              "Self-bot level (keep at 1)",                       "int",  "0 off, 1 GM by command, 2 everyone by command. 3 = YOU become a bot on login and the chat ignores you"),
     @("chat", "OllamaChat.Enable",                     "LLM chat on",                                      "bool", "master switch for everything below"),
     @("chat", "OllamaChat.Model",                      "Ollama model",                                     "text", "any model you have pulled; .ollama reload in-game after changing"),
     @("chat", "OllamaChat.EnableRandomChatter",        "Ambient general/trade/LFG chatter",                "bool", "bots start conversations on their own"),

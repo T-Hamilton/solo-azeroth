@@ -107,7 +107,8 @@ BOTS = {
     "AiPlayerbot.RandomBotMaps": S["BotMaps"],
     "AiPlayerbot.DisabledWithoutRealPlayer": "1",   # bots idle while you are logged out (saves CPU and LLM calls)
     "AiPlayerbot.RandomBotTalk": "1",               # the scripted one-liners stay; the LLM replies to them like anything else
-    "AiPlayerbot.SelfBotLevel": "3",                # everyone may use .bot / .playerbots commands (it is your server)
+    "AiPlayerbot.SelfBotLevel": "1",                # 1 = GM may turn their own character into a bot with a command.
+                                                    # NEVER 3: that attaches a bot AI to YOU on login, and the chat module then treats you as a bot.
 }
 # The chat governor, tuned for an always-on, bot-to-bot general chat (docs/LLM-CHAT.md explains each knob).
 SYSTEM_PROMPT = (
@@ -119,6 +120,7 @@ SYSTEM_PROMPT = (
 )
 OLLAMA = {
     "OllamaChat.Enable": "1",
+    "OllamaChat.DebugEnabled": str(S.get("ChatDebug", 0)),   # 1 = log the chat funnel (ambient tick summaries, reply decisions)
     "OllamaChat.Url": S["OllamaUrl"].rstrip("/") + "/api/generate",
     "OllamaChat.Model": S["OllamaModel"],
     "OllamaChat.NumPredict": "60",

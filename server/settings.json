@@ -21,5 +21,6 @@
   "OllamaUrl": "http://localhost:11434",
   "OllamaModel": "hf.co/mlabonne/gemma-3-12b-it-abliterated-GGUF:Q4_K_M",
   "OllamaParallel": 4,
-  "Motd": "Welcome to Solo Azeroth. The bots are talking about you."
+  "Motd": "Welcome to Solo Azeroth. The bots are talking about you.",
+  "ChatDebug": 0
 }
