@@ -134,7 +134,7 @@ OLLAMA = {
     "OllamaChat.Temperature": "0.9",
     "OllamaChat.RandomChatterQuestionChance": "20",
     # the conversation layer (our module patch): shared transcript per channel, partner stickiness, ambient hold
-    "OllamaChat.Transcript.Lines": "16",
+    "OllamaChat.Transcript.Lines": "10",   # enough context to follow a thread; more and the model imitates the crowd instead of answering
     "OllamaChat.Transcript.WindowSeconds": "600",
     "OllamaChat.BotConversation.EngagedWindowSeconds": "150",
     "OllamaChat.Ambient.HoldSeconds": "45",
@@ -149,7 +149,7 @@ OLLAMA = {
     "OllamaChat.MinRandomInterval": "25",
     "OllamaChat.MaxRandomInterval": "110",
     "OllamaChat.RandomChatterRealPlayerDistance": "100000",
-    "OllamaChat.RandomChatterBotCommentChance": "15",
+    "OllamaChat.RandomChatterBotCommentChance": "12",
     "OllamaChat.RandomChatterMaxBotsPerPlayer": "4",
     "OllamaChat.Chatter.UseGeneralChannel": "1",
     "OllamaChat.Chatter.UseTradeChannel": "1",
@@ -158,14 +158,17 @@ OLLAMA = {
     "OllamaChat.EnableEventChatter": "1",
     "OllamaChat.EventChatterRealPlayerDistance": "60",
     # bots answering bots: this is what makes it a conversation instead of a wall of openers
-    "OllamaChat.BotReplyChance.Say": "40",
-    "OllamaChat.BotReplyChance.Channel": "40",
-    "OllamaChat.BotReplyChance.Party": "35",
+    "OllamaChat.BotReplyChance.Say": "30",
+    "OllamaChat.BotReplyChance.Channel": "30",
+    "OllamaChat.BotReplyChance.Party": "30",
     "OllamaChat.BotReplyChance.Guild": "25",
     "OllamaChat.PlayerReplyChance.Say": "90",
     "OllamaChat.PlayerReplyChance.Channel": "70",
-    "OllamaChat.BotConversation.MaxChainDepth": "8",     # an argument may run eight bot-to-bot hops before a person has to feed it
-    "OllamaChat.BotConversation.ChanceDecayPct": "85",
+    "OllamaChat.BotConversation.MaxChainDepth": "6",     # an argument may run six bot-to-bot hops before a person has to feed it
+    "OllamaChat.BotConversation.ChanceDecayPct": "75",
+    "OllamaChat.BotConversation.ChainLinesPerMinute": "8",   # hard cap on bot-to-bot lines per channel per minute; replies to a person are not counted
+    "OllamaChat.RepeatPenalty": "1.15",                  # discourage parroting the transcript's words and openers
+    "OllamaChat.PresencePenalty": "0.3",
     "OllamaChat.BotConversation.RequireRecentHuman": "0",
     # pacing: a bot mid-exchange is exempt from these (direct address); they only pace the crowd
     "OllamaChat.Cooldown.PerBotSeconds": "10",
@@ -173,7 +176,8 @@ OLLAMA = {
     "OllamaChat.RateLimit.ScopePerMinute": "30",
     "OllamaChat.RateLimit.GlobalPerMinute": "100",
     # repetition: the opener check ("same first three words") killed short retorts; keep only the near-duplicate check
-    "OllamaChat.Repetition.OpenerHistorySize": "2",
+    "OllamaChat.Repetition.OpenerHistorySize": "6",       # "Seriously, Name?" x40: the opener check is what stops a whole channel copying one opener
+    "OllamaChat.Repetition.CheckDirectAddress": "1",      # ...so it applies to engaged replies too (a dropped line ends that thread, nothing worse)
     "OllamaChat.Repetition.SimilarityThreshold": "0.82",
     "OllamaChat.Repetition.WindowSeconds": "600",
     # they remember you, and each other

@@ -1,8 +1,8 @@
 diff --git a/src/mod-ollama-chat_config.cpp b/src/mod-ollama-chat_config.cpp
-index ebde5db..0e5fc76 100644
+index ebde5db..bbef2f3 100644
 --- a/src/mod-ollama-chat_config.cpp
 +++ b/src/mod-ollama-chat_config.cpp
-@@ -124,6 +124,14 @@ float    g_RepetitionSimilarityThreshold = 0.72f;
+@@ -124,6 +124,16 @@ float    g_RepetitionSimilarityThreshold = 0.72f;
  uint32_t g_RepetitionWindowSeconds       = 1800;
  uint32_t g_OpenerHistorySize             = 8;
  
@@ -11,13 +11,15 @@ index ebde5db..0e5fc76 100644
 +uint32_t    g_EngagedWindowSeconds    = 150;
 +uint32_t    g_AmbientHoldSeconds      = 45;
 +uint32_t    g_AmbientHoldPassPct      = 25;
++uint32_t    g_ChainLinesPerMinute     = 8;
++bool        g_RepetitionCheckDirectAddress = true;
 +std::string g_AddressedTemplate       = "{player_name} is talking to you, {bot_name}. Answer them.";
 +std::string g_AmbientJoinLine         = "There is a conversation going on above. Jump into it: react to what someone just said, take a side, back someone up or needle them. Do not start a new topic and do not repeat what was said.";
 +
  // --------------------------------------------
  // Topic engine
  // --------------------------------------------
-@@ -718,6 +726,15 @@ void LoadOllamaChatConfig()
+@@ -718,6 +728,17 @@ void LoadOllamaChatConfig()
      g_RepetitionWindowSeconds         = sConfigMgr->GetOption<uint32_t>("OllamaChat.Repetition.WindowSeconds", 1800);
      g_OpenerHistorySize               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Repetition.OpenerHistorySize", 8);
  
@@ -27,6 +29,8 @@ index ebde5db..0e5fc76 100644
 +    g_EngagedWindowSeconds            = sConfigMgr->GetOption<uint32_t>("OllamaChat.BotConversation.EngagedWindowSeconds", 150);
 +    g_AmbientHoldSeconds              = sConfigMgr->GetOption<uint32_t>("OllamaChat.Ambient.HoldSeconds", 45);
 +    g_AmbientHoldPassPct              = sConfigMgr->GetOption<uint32_t>("OllamaChat.Ambient.HoldPassPct", 25);
++    g_ChainLinesPerMinute             = sConfigMgr->GetOption<uint32_t>("OllamaChat.BotConversation.ChainLinesPerMinute", 8);
++    g_RepetitionCheckDirectAddress    = sConfigMgr->GetOption<bool>("OllamaChat.Repetition.CheckDirectAddress", true);
 +    g_AddressedTemplate               = sConfigMgr->GetOption<std::string>("OllamaChat.AddressedTemplate", g_AddressedTemplate);
 +    g_AmbientJoinLine                 = sConfigMgr->GetOption<std::string>("OllamaChat.Ambient.JoinLine", g_AmbientJoinLine);
 +
@@ -34,10 +38,10 @@ index ebde5db..0e5fc76 100644
      g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);
      g_TopicWeightWorld                = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightWorld", 30);
 diff --git a/src/mod-ollama-chat_config.h b/src/mod-ollama-chat_config.h
-index 1bf4a26..33a32bd 100644
+index 1bf4a26..6331a97 100644
 --- a/src/mod-ollama-chat_config.h
 +++ b/src/mod-ollama-chat_config.h
-@@ -202,6 +202,17 @@ extern float    g_RepetitionSimilarityThreshold;
+@@ -202,6 +202,19 @@ extern float    g_RepetitionSimilarityThreshold;
  extern uint32_t g_RepetitionWindowSeconds;
  extern uint32_t g_OpenerHistorySize;
  
@@ -49,6 +53,8 @@ index 1bf4a26..33a32bd 100644
 +extern uint32_t    g_EngagedWindowSeconds;      // two participants who answered each other stay engaged this long
 +extern uint32_t    g_AmbientHoldSeconds;        // a scope with a line this recent is "live"
 +extern uint32_t    g_AmbientHoldPassPct;        // chance an ambient line is still allowed into a live scope
++extern uint32_t    g_ChainLinesPerMinute;       // hard cap on bot-to-bot replies per scope per minute (0 = none)
++extern bool        g_RepetitionCheckDirectAddress; // run the repetition/opener filter on engaged replies too
 +extern std::string g_AddressedTemplate;         // {addressed} in the reply template when the line is aimed at this bot
 +extern std::string g_AmbientJoinLine;           // replaces the random topic line when the scope is live
 +
@@ -56,7 +62,7 @@ index 1bf4a26..33a32bd 100644
  // Topic engine
  // --------------------------------------------
 diff --git a/src/mod-ollama-chat_dispatch.cpp b/src/mod-ollama-chat_dispatch.cpp
-index f1364df..ef0d099 100644
+index f1364df..6072df4 100644
 --- a/src/mod-ollama-chat_dispatch.cpp
 +++ b/src/mod-ollama-chat_dispatch.cpp
 @@ -263,7 +263,13 @@ namespace
@@ -74,7 +80,17 @@ index f1364df..ef0d099 100644
                      return false;
  
                  // Checked before generating too; re-checked because the only
-@@ -381,6 +387,18 @@ namespace
+@@ -348,7 +354,8 @@ namespace
+         // the same answer is correct -- suppressing it leaves the asker
+         // staring at silence, which reads as the bot being broken rather than
+         // as anti-repetition working.
+-        if (!directAddress && Governor_IsRepetitive(botGuid, c.request.scopeKey, c.text))
++        if ((!directAddress || g_RepetitionCheckDirectAddress) &&
++            Governor_IsRepetitive(botGuid, c.request.scopeKey, c.text))
+         {
+             ++g_droppedGovernor;
+             if (g_DebugEnabled)
+@@ -381,6 +388,18 @@ namespace
          Governor_RecordUtterance(botGuid, c.request.scopeKey, c.text);
          ++g_totalDelivered;
  
@@ -109,10 +125,10 @@ index af5d2f3..a2cbdfa 100644
      std::string       prompt;
      OllamaRequestKind kind = OllamaRequestKind::ChatReply;
 diff --git a/src/mod-ollama-chat_governor.cpp b/src/mod-ollama-chat_governor.cpp
-index 1df3854..3dd9e11 100644
+index 1df3854..959b35e 100644
 --- a/src/mod-ollama-chat_governor.cpp
 +++ b/src/mod-ollama-chat_governor.cpp
-@@ -45,14 +45,29 @@ namespace
+@@ -45,14 +45,30 @@ namespace
          // the next thing that person says in that scope is a continuation, not
          // ambient chatter, so it bypasses the pacing cooldowns.
          std::unordered_map<uint64_t, std::unordered_map<std::string, TimePoint>> conversations;
@@ -138,11 +154,12 @@ index 1df3854..3dd9e11 100644
 +        TimePoint             lastLine{};       // last transcript line, by anyone
          std::deque<Utterance> history;
          std::deque<TimePoint> sendTimes;
++        std::deque<TimePoint> chainTimes;      // bot-to-bot replies in the last minute
 +        std::deque<TranscriptLine> transcript;
      };
  
      std::unordered_map<uint64_t, BotState>    g_bots;
-@@ -335,6 +350,91 @@ bool Governor_InConversation(ObjectGuid botGuid, ObjectGuid playerGuid,
+@@ -335,6 +351,109 @@ bool Governor_InConversation(ObjectGuid botGuid, ObjectGuid playerGuid,
      return SecondsSince(scopeIt->second, Clock::now()) <= double(g_ConversationWindowSeconds);
  }
  
@@ -231,10 +248,34 @@ index 1df3854..3dd9e11 100644
 +    return SecondsSince(scopeIt->second, Clock::now()) <= double(g_EngagedWindowSeconds);
 +}
 +
++bool Governor_TryConsumeChainSlot(const std::string& scopeKey)
++{
++    if (g_ChainLinesPerMinute == 0)
++        return true;
++
++    const TimePoint now = Clock::now();
++    std::lock_guard<std::mutex> lock(g_mutex);
++    ScopeState& scope = g_scopes[scopeKey];
++    TrimWindow(scope.chainTimes, now, 60.0);
++    if (scope.chainTimes.size() >= g_ChainLinesPerMinute)
++    {
++        ++g_stats.blockedRate;
++        return false;
++    }
++    scope.chainTimes.push_back(now);
++    return true;
++}
++
  // --- cooldowns and rate limits -------------------------------------------
  
  namespace
-@@ -604,7 +704,11 @@ void Governor_Update()
+@@ -599,12 +718,17 @@ void Governor_Update()
+     {
+         ScopeState& s = it->second;
+         TrimWindow(s.sendTimes, now, 60.0);
++        TrimWindow(s.chainTimes, now, 60.0);
+ 
+         while (!s.history.empty() &&
                 SecondsSince(s.history.front().when, now) > double(g_RepetitionWindowSeconds))
              s.history.pop_front();
  
@@ -247,7 +288,7 @@ index 1df3854..3dd9e11 100644
                            SecondsSince(s.lastHuman, now) > staleAfter &&
                            SecondsSince(s.lastSend, now)  > staleAfter;
  
-@@ -631,6 +735,16 @@ void Governor_Update()
+@@ -631,6 +755,16 @@ void Governor_Update()
  
              pit = pit->second.empty() ? bot.conversations.erase(pit) : std::next(pit);
          }
@@ -265,10 +306,10 @@ index 1df3854..3dd9e11 100644
  
      g_stats.trackedBots   = static_cast<uint32_t>(g_bots.size());
 diff --git a/src/mod-ollama-chat_governor.h b/src/mod-ollama-chat_governor.h
-index 5f5611d..b61a0ff 100644
+index 5f5611d..2465415 100644
 --- a/src/mod-ollama-chat_governor.h
 +++ b/src/mod-ollama-chat_governor.h
-@@ -91,6 +91,30 @@ bool Governor_TryConsumeEmoteReaction(ObjectGuid botGuid, ObjectGuid playerGuid)
+@@ -91,6 +91,35 @@ bool Governor_TryConsumeEmoteReaction(ObjectGuid botGuid, ObjectGuid playerGuid)
  // cooldown when the event is actually committed.
  bool Governor_TryConsumeEventCooldown(ObjectGuid botGuid);
  
@@ -296,11 +337,16 @@ index 5f5611d..b61a0ff 100644
 +void Governor_NoteEngagement(ObjectGuid a, ObjectGuid b, const std::string& scopeKey);
 +bool Governor_Engaged(ObjectGuid a, ObjectGuid b, const std::string& scopeKey);
 +
++// Bot-to-bot replies per scope per minute. Engaged replies skip the pacing
++// cooldowns, so without this an argument among four bots branches into forty
++// lines a minute. Replies to a person are never counted. Reserves a slot.
++bool Governor_TryConsumeChainSlot(const std::string& scopeKey);
++
  // --- maintenance ----------------------------------------------------------
  
  void Governor_OnPlayerLogout(ObjectGuid guid);
 diff --git a/src/mod-ollama-chat_handler.cpp b/src/mod-ollama-chat_handler.cpp
-index 264d845..980b397 100644
+index 264d845..4064e4a 100644
 --- a/src/mod-ollama-chat_handler.cpp
 +++ b/src/mod-ollama-chat_handler.cpp
 @@ -126,8 +126,14 @@ static bool OllamaIsDirectAddress(Player* bot, Player* speaker, ChatChannelSourc
@@ -390,7 +436,7 @@ index 264d845..980b397 100644
                      if(g_DebugEnabled)
                      {
                          LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} PASSED chance roll ({} < {}%{})", bot->GetName(), roll, botChance, botIsAddressed ? ", addressed" : "");
-@@ -1692,17 +1718,43 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
+@@ -1692,17 +1718,52 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
          return;
      }
      
@@ -418,18 +464,27 @@ index 264d845..980b397 100644
 +        std::shuffle(others.begin(), others.end(), g);
 +
 +        uint32_t room = g_MaxBotsToPick > picked.size() ? g_MaxBotsToPick - uint32_t(picked.size()) : 0;
-+        if (!addressedBots.empty())
-         {
--            LOG_INFO("module.ollamachat", "[Ollama Chat] Limiting {} bots to {} (MaxBotsToPick)", finalCandidates.size(), countToPick);
++        if (senderIsBot)
++        {
++            // A bot's line gets one answer: its partner if it has one, else
++            // one bystander. Two answers per line is a branching factor of two
++            // and the channel explodes.
++            if (!picked.empty())
++                picked.resize(1);
++            room = picked.empty() ? 1 : 0;
++        }
++        else if (!addressedBots.empty())
++        {
 +            // A crowd does not pile onto someone else's exchange: at most one
 +            // bystander, and only sometimes.
 +            room = (room > 0 && urand(0, 99) < 35) ? 1 : 0;
++        }
++        else if (room > 1)
+         {
+-            LOG_INFO("module.ollamachat", "[Ollama Chat] Limiting {} bots to {} (MaxBotsToPick)", finalCandidates.size(), countToPick);
++            room = urand(1, room);
          }
 -        finalCandidates.resize(countToPick);
-+        else if (room > 1)
-+        {
-+            room = urand(1, room);
-+        }
 +        for (uint32_t i = 0; i < room && i < others.size(); ++i)
 +            picked.push_back(others[i]);
 +
@@ -440,16 +495,27 @@ index 264d845..980b397 100644
      }
      
      if(g_DebugEnabled && !finalCandidates.empty())
-@@ -1741,7 +1793,7 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
+@@ -1741,7 +1802,18 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
              continue;
          }
  
 -        std::string prompt = GenerateBotPrompt(bot, msg, player);
++        // Bot answering a bot: bounded per scope per minute, whatever the
++        // engagement says. Answers to a person are never counted here.
++        if (senderIsBot && !Governor_TryConsumeChainSlot(scopeKey))
++        {
++            if (g_DebugEnabled)
++                LOG_INFO("module.ollamachat",
++                         "[Ollama Chat] Bot {} skipped: bot-to-bot lines per minute cap reached in {}.",
++                         bot->GetName(), scopeKey);
++            break;
++        }
++
 +        std::string prompt = GenerateBotPrompt(bot, msg, player, directAddress, contextKey);
          if (prompt.empty())
              continue;
  
-@@ -1754,6 +1806,7 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
+@@ -1754,6 +1826,7 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
          request.chainDepth  = chainDepth;
          request.directAddress = directAddress;
          request.scopeKey    = scopeKey;
@@ -457,7 +523,7 @@ index 264d845..980b397 100644
          request.prompt      = std::move(prompt);
          request.botName     = bot->GetName();
          request.originMessage = msg;
-@@ -1900,8 +1953,9 @@ static bool IsBotEligibleForChatChannelLocal(Player* bot, Player* player, ChatCh
+@@ -1900,8 +1973,9 @@ static bool IsBotEligibleForChatChannelLocal(Player* bot, Player* player, ChatCh
      }
  }
  
@@ -469,7 +535,7 @@ index 264d845..980b397 100644
      if (!bot || !player) {
          return "";
      }
-@@ -1957,6 +2011,17 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
+@@ -1957,6 +2031,17 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
      std::string chatHistory         = GetBotHistoryPrompt(botGuid, playerGuid, playerMessage);
      std::string sentimentInfo       = GetSentimentPromptAddition(bot, player);
  
@@ -487,7 +553,7 @@ index 264d845..980b397 100644
      // Retrieve RAG information if enabled
      std::string ragInfo;
      if (g_EnableRAG && g_RAGSystem) {
-@@ -2009,7 +2074,17 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
+@@ -2009,7 +2094,17 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
          fmt::arg("player_message", playerMessage),
          fmt::arg("extra_info", extraInfo),
          fmt::arg("chat_history", chatHistory),
@@ -506,7 +572,7 @@ index 264d845..980b397 100644
      );
  
      // Add RAG information to the prompt if available
-@@ -2024,7 +2099,9 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
+@@ -2024,7 +2119,9 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
  
      // What this bot remembers, and how it feels about people. Bounded by
      // their own token budgets, so this cannot grow the prompt without limit.
@@ -706,3 +772,90 @@ index 710070b..aacece2 100644
 +                 "[Ollama Chat] ambient tick: bots={} audience={} due={} rolled={} topic={} destination={} governor={} submitted={}",
 +                 cBots, cAud, cDue, cRoll, cTopic, cDest, cGov, cSent);
  }
+diff --git a/src/mod-ollama-chat_response.cpp b/src/mod-ollama-chat_response.cpp
+index 0e7368a..c8fdd90 100644
+--- a/src/mod-ollama-chat_response.cpp
++++ b/src/mod-ollama-chat_response.cpp
+@@ -370,6 +370,65 @@ std::string ClampReplyLength(const std::string& text, uint32_t maxLen)
+ 
+ // --------------------------------------------------------------------------
+ 
++namespace
++{
++    // "Name: " at the start of a line, any name: a capitalised word of 2-12
++    // letters followed by a colon. Shown a transcript, the model sometimes
++    // writes in transcript form -- its own name, someone else's, or several
++    // speakers in a row. Length of the matched prefix, or 0.
++    size_t SpeakerPrefixLength(const std::string& line)
++    {
++        size_t i = 0;
++        while (i < line.size() && IsSpace(static_cast<unsigned char>(line[i])))
++            ++i;
++        const size_t start = i;
++        if (i >= line.size() || !std::isupper(static_cast<unsigned char>(line[i])))
++            return 0;
++        while (i < line.size() && std::isalpha(static_cast<unsigned char>(line[i])))
++            ++i;
++        const size_t nameLen = i - start;
++        if (nameLen < 2 || nameLen > 12 || i >= line.size() || line[i] != ':')
++            return 0;
++        ++i;
++        if (i < line.size() && line[i] != ' ')
++            return 0;   // "Note:xyz" / a time "10:30" is not a speaker
++        while (i < line.size() && IsSpace(static_cast<unsigned char>(line[i])))
++            ++i;
++        return i;
++    }
++
++    // Keep the first spoken line; if a later line opens with another
++    // "Name:", the model kept the transcript going and the rest is not ours.
++    std::string CutAtNextSpeakerLine(const std::string& text)
++    {
++        std::string out;
++        size_t pos = 0;
++        bool haveFirst = false;
++        while (pos <= text.size())
++        {
++            size_t nl = text.find('\n', pos);
++            std::string line = text.substr(pos, nl == std::string::npos ? std::string::npos : nl - pos);
++            const bool blank = Trim(line).empty();
++            if (haveFirst && !blank && SpeakerPrefixLength(line) > 0)
++                break;
++            if (!blank)
++                haveFirst = true;
++            out += line;
++            if (nl == std::string::npos)
++                break;
++            out += '\n';
++            pos = nl + 1;
++        }
++        return out;
++    }
++
++    std::string StripAnySpeakerPrefix(const std::string& text)
++    {
++        const size_t n = SpeakerPrefixLength(text);
++        return n > 0 ? text.substr(n) : text;
++    }
++}
++
+ std::string ProcessLlmResponse(const std::string& raw,
+                                const std::string& botName,
+                                uint32_t* outEmoteId)
+@@ -386,6 +445,8 @@ std::string ProcessLlmResponse(const std::string& raw,
+     if (s.empty())
+         return "";
+ 
++    s = CutAtNextSpeakerLine(s);
++
+     // Before StripMarkdown, not after. StripMarkdown removes every '*', so by
+     // the time this used to run the "*waves*" gesture form could never match --
+     // only [emote:name] and /wave survived. ExtractEmoteTag leaves the words of
+@@ -403,6 +464,7 @@ std::string ProcessLlmResponse(const std::string& raw,
+     s = CollapseWhitespace(s);
+     s = UnwrapQuotedReply(s);
+     s = StripSpeakerPrefix(s, botName);
++    s = StripAnySpeakerPrefix(s);   // "Mushotko: ..." leaking someone else's label
+ 
+     if (g_ResponseStripDecorativeUnicode)
+         s = StripDecorativeUnicode(s);

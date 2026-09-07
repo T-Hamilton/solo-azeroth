@@ -115,9 +115,12 @@ Out of the box the module makes quips, not conversation. What the code did, and 
 | A separate model call classified every answered line as POSITIVE/NEGATIVE for a +-0.05 tone number. | One of four generation slots busy with nothing. | Off. The memory and relationship features carry how a bot feels. |
 | "Reply in under 15 words", 60 tokens. | Every bot: "Ugh, seriously?" | Prompt is a chat log ending in "write your next line: answer what was said, use names, take a side, push back". 110 tokens. Both editable in `prompts.txt`. |
 
-Knobs: `Transcript.Lines`, `Transcript.WindowSeconds`, `BotConversation.EngagedWindowSeconds`, `Ambient.HoldSeconds`,
-`Ambient.HoldPassPct` (all under `OllamaChat.` in `setup\gen_configs.py`), and the ADDRESSED and AMBIENT_JOIN sections
-of `personalities\prompts.txt`.
+| First session with the layer: four engaged bots, two answers per bot line, and engaged replies exempt from every cap. | Forty lines a minute, all opening "Seriously, Name?" because each bot copied the transcript. | A bot's line gets exactly one answer; bot-to-bot lines are capped per channel per minute (`ChainLinesPerMinute`, 8); the opener filter applies to engaged replies too; a repeat/presence penalty on generation; the prompt names the exact line to answer and forbids copying openers; transcript trimmed to 10 lines; "Name:" labels the model writes are stripped whoever's name it is. |
+
+Knobs: `Transcript.Lines`, `Transcript.WindowSeconds`, `BotConversation.EngagedWindowSeconds`,
+`BotConversation.ChainLinesPerMinute`, `Ambient.HoldSeconds`, `Ambient.HoldPassPct`, `Repetition.CheckDirectAddress`
+(all under `OllamaChat.` in `setup\gen_configs.py`), and the ADDRESSED and AMBIENT_JOIN sections of
+`personalities\prompts.txt`.
 
 ## Diagnosing "the bots are not talking"
 
