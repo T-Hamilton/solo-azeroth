@@ -51,9 +51,13 @@ random, uniformly, from every template with `manual_only = 0`, the first time it
 proportions in the pack are the distribution. `server\personalities\2026_09_06_00_personality_pack_genchat.sql`
 has 10 toxic, 6 normal and 4 nice voices and flips the 33 stock ones to manual-only.
 
-To change the mix, edit that file (or add another `*.sql` in the same folder; the server applies anything new on
-its next start), then `.ollama reload`. To give one bot a specific voice: `.ollama personality set <bot> <KEY>`.
-To wipe assignments and re-roll everyone: `DELETE FROM acore_characters.mod_ollama_chat_personality;`.
+**Editing them:** the source of truth is the plain-text `server\personalities\personalities.txt`. The Desktop
+shortcut **Solo Azeroth - Edit Personalities** opens it in Notepad and, when you close Notepad, rebuilds the SQL,
+applies it and reloads the bots (no restart). Same thing from a prompt: `solo.cmd personalities`. Each entry starts
+with `=== KEY ===` and the text until the next header is what the model is told; the file explains the rest. The
+number of entries per kind is the mix. Bots keep the personality they already rolled; `solo.cmd personalities
+--reroll` makes everyone pick again from the new list. To hand one bot a specific voice in game:
+`.ollama personality set <bot> <KEY>`.
 
 ## The volume: what each knob does
 

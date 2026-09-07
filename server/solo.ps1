@@ -9,7 +9,8 @@
     .\solo.cmd configs      (re)generate runtime\configs\*.conf from settings.json + settings.local.json, install personality packs
     .\solo.cmd first-run    one-time: create the MySQL data dir, databases, import the world, create your account
     .\solo.cmd client       point your WoW client at this server and launch it (same as the Play shortcut)
-    .\solo.cmd shortcuts    put the Play / Start / Stop / Bot Settings shortcuts on your Desktop
+    .\solo.cmd shortcuts    put the Play / Start / Stop / Bot Settings / Edit Personalities shortcuts on your Desktop
+    .\solo.cmd personalities [--reroll]   apply server\personalities\personalities.txt to the bots (edit it in Notepad)
 
   Each server opens in its own console window so you can type GM commands into it (the worldserver console takes
   commands without the leading dot, e.g.  account set gmlevel player 3 -1  or  ollama status ).
@@ -105,6 +106,7 @@ switch ($cmd) {
         if (Listening $S.MySQLPort) { Write-Host "stopping MySQL"; & "$($S.MySQLBin)\mysqladmin.exe" "--user=root" "--host=127.0.0.1" "--port=$($S.MySQLPort)" shutdown 2>$null }
     }
     "client"    { & powershell -NoProfile -ExecutionPolicy Bypass -File "$($S.RootDir)\launchers\play.ps1" }
+    "personalities" { & $Py "$($S.RootDir)	oolsuild_personalities.py" $arg }
     "shortcuts" {
         # real .lnk shortcuts: the .cmd files locate their scripts relative to themselves, so copying them would not work
         $desk = [Environment]::GetFolderPath("Desktop")
@@ -125,5 +127,5 @@ switch ($cmd) {
         }
         Get-Process worldserver, authserver, mysqld, ollama -ErrorAction SilentlyContinue | Format-Table Id, ProcessName, @{n = "MB"; e = { [int]($_.WorkingSet64 / 1MB) } }, Path -AutoSize
     }
-    default { Write-Host "usage: .\solo.cmd start | stop | status | mysql | ollama | configs | first-run | client | shortcuts" }
+    default { Write-Host "usage: .\solo.cmd start | stop | status | mysql | ollama | configs | first-run | client | shortcuts | personalities [--reroll]" }
 }
