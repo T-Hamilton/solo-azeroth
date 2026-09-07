@@ -108,6 +108,9 @@ bot AI attached on login, the module counts them as a bot, and nothing is ever s
 - `.ollama test say something rude about mages`: one raw prompt straight to the model; the reply is printed to
   the server console and log.
 - `solo.cmd status`: is Ollama listening? `ollama list` in a terminal: is the model pulled?
+- First bot line after a quiet spell takes 6+ s, then they're fast: the model got unloaded. `ollama ps` should say
+  UNTIL = Forever; if not, `solo.cmd ollama --restart` (the start script sets `OLLAMA_KEEP_ALIVE=-1` as a user
+  environment variable, but an Ollama started by its tray app before that only picks it up after a restart).
 - Are you in the channel? `/join General` after a zone change if you left it.
 - Bots sit still and silent until a real player is online (by design).
 - The worldserver console prints `[Ollama Chat]` lines on startup; errors about the endpoint mean Ollama is not up

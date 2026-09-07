@@ -5,7 +5,7 @@
     .\solo.cmd stop         stop every server process (MySQL included; Ollama is left running)
     .\solo.cmd status       what is running / listening
     .\solo.cmd mysql        start only MySQL
-    .\solo.cmd ollama       start only Ollama and make sure the chat model is downloaded
+    .\solo.cmd ollama [--restart]   start only Ollama and make sure the chat model is downloaded (--restart: relaunch it)
     .\solo.cmd configs      (re)generate runtime\configs\*.conf from settings.json + settings.local.json, install personality packs
     .\solo.cmd first-run    one-time: create the MySQL data dir, databases, import the world, create your account
     .\solo.cmd client       point your WoW client at this server and launch it (same as the Play shortcut)
@@ -36,9 +36,21 @@ function Start-Ollama {
     $ol = Get-Ollama
     if (-not $ol) { Write-Host "Ollama is not installed. Install it with:  winget install Ollama.Ollama   (bots will play without chat until then)"; return }
     $uri = [uri]$S.OllamaUrl
+    # Ollama's tray app starts "ollama serve" at Windows login, before this script runs, so the settings below are also
+    # persisted as user environment variables: whoever starts Ollama, the chat model stays loaded (KEEP_ALIVE=-1 instead
+    # of unloading after 5 idle minutes, which costs a 6 s stall on the next bot line) and answers 4 prompts at once.
+    $persist = @{ OLLAMA_KEEP_ALIVE = "-1"; OLLAMA_NUM_PARALLEL = "$($S.OllamaParallel)" }
+    $changed = $false
+    foreach ($k in $persist.Keys) {
+        if ([Environment]::GetEnvironmentVariable($k, "User") -ne $persist[$k]) { [Environment]::SetEnvironmentVariable($k, $persist[$k], "User"); $changed = $true }
+        Set-Item "env:$k" $persist[$k]
+    }
+    if ($arg -eq "--restart" -or ($changed -and (Listening $uri.Port))) {
+        Write-Host "Ollama: restarting so the keep-alive / parallel settings apply"
+        Get-Process "ollama app", "ollama" -ErrorAction SilentlyContinue | Stop-Process -Force
+        for ($i = 0; $i -lt 10 -and (Listening $uri.Port); $i++) { Start-Sleep 1 }
+    }
     if (-not (Listening $uri.Port)) {
-        $env:OLLAMA_NUM_PARALLEL = "$($S.OllamaParallel)"
-        $env:OLLAMA_KEEP_ALIVE = "-1"      # keep the chat model loaded instead of unloading it after 5 idle minutes
         Start-Process -FilePath $ol -ArgumentList "serve" -WindowStyle Hidden
         for ($i = 0; $i -lt 20 -and -not (Listening $uri.Port); $i++) { Start-Sleep 1 }
         Write-Host "Ollama: started on port $($uri.Port)"
