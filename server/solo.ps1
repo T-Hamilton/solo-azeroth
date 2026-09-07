@@ -118,7 +118,7 @@ switch ($cmd) {
         if (Listening $S.MySQLPort) { Write-Host "stopping MySQL"; & "$($S.MySQLBin)\mysqladmin.exe" "--user=root" "--host=127.0.0.1" "--port=$($S.MySQLPort)" shutdown 2>$null }
     }
     "client"    { & powershell -NoProfile -ExecutionPolicy Bypass -File "$($S.RootDir)\launchers\play.ps1" }
-    "personalities" { & $Py "$($S.RootDir)	oolsuild_personalities.py" $arg }
+    "personalities" { & $Py "$($S.RootDir)\tools\build_personalities.py" $arg }
     "shortcuts" {
         # real .lnk shortcuts: the .cmd files locate their scripts relative to themselves, so copying them would not work
         $desk = [Environment]::GetFolderPath("Desktop")
