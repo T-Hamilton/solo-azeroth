@@ -162,7 +162,11 @@ party), `.gm on`, `.tele orgrimmar`, `.modify speed 3`.
 
 ## Changing things
 
-- **How many bots, what levels, how chatty:** Bot Settings window, then "Save + restart realm".
+- **How many bots, what levels, how chatty:** Bot Settings window. "Reload (no restart)" applies everything except
+  bot count, levels and maps, which need "Save + restart realm". What you save there is kept in
+  `settings.local.json` and survives `solo.cmd configs`.
+- **The canned playerbots chatter** ("I just accepted quest X", "looted Y", scripted one-liners) is off by default;
+  the LLM event chatter covers those moments with personality. Bot Settings > Bots has both switches.
 - **The personalities and the toxic/normal/nice mix:** Edit Personalities. The number of entries per kind is the mix.
   Details at the top of the file and in `docs/LLM-CHAT.md`.
 - **Ports, realm name, account, model:** `settings.local.json`, then `solo.cmd configs`, then restart.

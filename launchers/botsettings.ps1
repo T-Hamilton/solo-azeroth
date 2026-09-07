@@ -4,7 +4,8 @@
 #   Reload chat         applies the chat tab to the running server right away (.ollama reload), no restart
 #   Save + restart      writes and restarts the realm (needed for the Bots tab)
 #   Status              shows what the chat engine is doing right now (.ollama status)
-# NOTE: solo.cmd configs regenerates both files from settings + gen_configs.py and overwrites these edits.
+# Every save is also stored in server\settings.local.json under "ConfOverrides", which gen_configs.py applies last:
+# solo.cmd configs (run by the scripts whenever settings change) keeps what you set here.
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 . "$PSScriptRoot\..\server\lib.ps1"
@@ -26,7 +27,8 @@ $defs = @(
     @("Bots", "bots", "AiPlayerbot.RandomBotJoinLfg",          "Bots use the dungeon finder",                   "bool",           ""),
     @("Bots", "bots", "AiPlayerbot.RandomBotGroupNearby",      "Bots may invite you to group",                  "bool",           ""),
     @("Bots", "bots", "AiPlayerbot.RandomBotGuildNearby",      "Bots may invite you to their guild",            "bool",           ""),
-    @("Bots", "bots", "AiPlayerbot.RandomBotTalk",             "Scripted one-liners (not the LLM)",             "bool",           "the canned playerbots chatter; the LLM still reacts to it"),
+    @("Bots", "bots", "AiPlayerbot.RandomBotTalk",             "Scripted one-liners (not the LLM)",             "bool",           "the canned playerbots chatter (hello, lol...); off by default, the LLM does this better"),
+    @("Bots", "bots", "AiPlayerbot.EnableBroadcasts",          "Scripted broadcasts (accepted quest X, looted Y)", "bool",        "the canned 'I just accepted...' / 'looted...' / 'anyone for dungeon...' lines; off by default"),
     @("Bots", "bots", "AiPlayerbot.RandomBotSuggestDungeons",  "Bots suggest dungeons in chat",                 "bool",           ""),
     @("Bots", "bots", "AiPlayerbot.SelfBotLevel",              "Self-bot level  (keep at 1)",                   "int:0:2",        "0 off, 1 GM by command, 2 everyone by command. 3 would make YOU a bot on login; not offered here"),
     # ---------------------------------------------------------------- Chat
@@ -190,7 +192,20 @@ function Collect {
     }
     return $v
 }
-function Save-All { $v = Collect; Write-Conf $botsConf $v.bots; Write-Conf $chatConf $v.chat }
+function Save-Overrides($v) {
+    # persist into settings.local.json -> ConfOverrides, so solo.cmd configs regenerates the files WITH these values
+    $path = Join-Path $S.ServerDir "settings.local.json"
+    $obj = if (Test-Path $path) { Get-Content $path -Raw | ConvertFrom-Json } else { [pscustomobject]@{} }
+    $ov = [ordered]@{}
+    foreach ($pair in @(@("playerbots.conf", $v.bots), @("mod_ollama_chat.conf", $v.chat))) {
+        $h = [ordered]@{}
+        foreach ($k in ($pair[1].Keys | Sort-Object)) { $h[$k] = $pair[1][$k] }
+        $ov[$pair[0]] = $h
+    }
+    if ($obj.PSObject.Properties["ConfOverrides"]) { $obj.ConfOverrides = $ov } else { $obj | Add-Member -NotePropertyName ConfOverrides -NotePropertyValue $ov }
+    $obj | ConvertTo-Json -Depth 6 | Set-Content $path -Encoding UTF8
+}
+function Save-All { $v = Collect; Write-Conf $botsConf $v.bots; Write-Conf $chatConf $v.chat; Save-Overrides $v }
 
 $status = New-Object System.Windows.Forms.TextBox
 $status.Multiline = $true; $status.ReadOnly = $true; $status.ScrollBars = "Vertical"
@@ -210,12 +225,15 @@ function Add-Button($text, $x, $action) {
 }
 Add-Button "Save" 10 {
     Save-All
-    $status.Text = "saved. Bots tab: takes effect on the next realm start. Chat/Advanced tabs: press Reload chat."
+    $status.Text = "saved. Bot count / levels / maps: next realm start. Everything else: press Reload."
 }
-Add-Button "Reload chat" 170 {
+Add-Button "Reload (no restart)" 170 {
     Save-All
+    # re-read the .conf files, then let both modules pick the values up (bot count / levels / maps still need a restart)
+    Invoke-Soap $S "reload config" 2>$null | Out-Null
+    Invoke-Soap $S "playerbots rndbot reload" 2>$null | Out-Null
     $r = Invoke-Soap $S "ollama reload" 2>&1 | Out-String
-    $status.Text = $(if ($r -match "reload") { "chat settings applied to the running server" } else { "saved; the server is not running (or SOAP is off) - they apply on the next start" })
+    $status.Text = $(if ($r -match "reload") { "settings applied to the running server (bot count / levels / maps: next restart)" } else { "saved; the server is not running (or SOAP is off) - they apply on the next start" })
 }
 Add-Button "Status" 330 {
     $r = Invoke-Soap $S "ollama status" 2>&1 | Out-String

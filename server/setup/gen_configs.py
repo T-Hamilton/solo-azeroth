@@ -107,7 +107,11 @@ BOTS = {
     "AiPlayerbot.RandomBotMaps": S["BotMaps"],
     "AiPlayerbot.RandomBotsPerInterval": str(max(60, S["Bots"] // 8)),   # logins per 20 s cycle: the whole population is in within ~3 min
     "AiPlayerbot.DisabledWithoutRealPlayer": "1",   # bots idle while you are logged out (saves CPU and LLM calls)
-    "AiPlayerbot.RandomBotTalk": "1",               # the scripted one-liners stay; the LLM replies to them like anything else
+    # the canned playerbots chatter is OFF: the LLM event chatter covers dings/loot/deaths with actual personality.
+    # RandomBotTalk = scripted one-liners; EnableBroadcasts = "accepted quest X" / "looted Y" / "suggest dungeon" spam
+    "AiPlayerbot.RandomBotTalk": "0",
+    "AiPlayerbot.EnableBroadcasts": "0",
+    "AiPlayerbot.RandomBotSayWithoutMaster": "0",
     "AiPlayerbot.SelfBotLevel": "1",                # 1 = GM may turn their own character into a bot with a command.
                                                     # NEVER 3: that attaches a bot AI to YOU on login, and the chat module then treats you as a bot.
 }
@@ -171,11 +175,17 @@ OLLAMA = {
     "OllamaChat.EnableWhisperReplies": "1",
 }
 
+# Anything saved in the Bot Settings window lands in settings.local.json under "ConfOverrides" and is applied last,
+# so it survives every regeneration: {"ConfOverrides": {"playerbots.conf": {...}, "mod_ollama_chat.conf": {...}}}
+CONF_OVERRIDES = S.get("ConfOverrides", {})
+
 out = os.path.join(RUNTIME, "configs")
 os.makedirs(os.path.join(out, "modules"), exist_ok=True)
 for name, ov, sub in (("worldserver.conf", WORLD, ""), ("authserver.conf", AUTH, ""),
                       ("playerbots.conf", BOTS, "modules"), ("mod_ollama_chat.conf", OLLAMA, "modules")):
     dist = find_dist(name + ".dist")
     dst = os.path.join(out, sub, name)
+    user = CONF_OVERRIDES.get(name, {})
+    ov = dict(ov, **{k: (q(v) if isinstance(v, str) and not re.fullmatch(r"-?[0-9.]+", v) and v not in ("0", "1") else str(v)) for k, v in user.items()})
     open(dst, "w", encoding="utf-8").write(render(dist, ov))
-    print("wrote", os.path.relpath(dst, SERVER))
+    print("wrote", os.path.relpath(dst, SERVER), ("(+%d from Bot Settings)" % len(user)) if user else "")
