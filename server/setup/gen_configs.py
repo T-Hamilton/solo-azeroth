@@ -105,6 +105,7 @@ BOTS = {
     "AiPlayerbot.RandomBotMinLevel": str(S["BotMinLevel"]),
     "AiPlayerbot.RandomBotMaxLevel": str(S["BotMaxLevel"]),
     "AiPlayerbot.RandomBotMaps": S["BotMaps"],
+    "AiPlayerbot.RandomBotsPerInterval": str(max(60, S["Bots"] // 8)),   # logins per 20 s cycle: the whole population is in within ~3 min
     "AiPlayerbot.DisabledWithoutRealPlayer": "1",   # bots idle while you are logged out (saves CPU and LLM calls)
     "AiPlayerbot.RandomBotTalk": "1",               # the scripted one-liners stay; the LLM replies to them like anything else
     "AiPlayerbot.SelfBotLevel": "1",                # 1 = GM may turn their own character into a bot with a command.
