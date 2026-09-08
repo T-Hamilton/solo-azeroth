@@ -23,7 +23,8 @@ That client's class tables list 32 classes and its addons are Ascension's forks,
 `client-patches/README.md` explains the stock-only `patch-Z.MPQ` that gives you the plain 10-class creation screen;
 Ascension's ElvUI (7.x) doesn't run on a stock server, the standard ElvUI-WotLK 6.09 from
 github.com/ElvUI-WotLK/ElvUI does; and the item display ids in the world database must be swapped for Ascension's
-numbering (`SUMMARY.md`, "Local-only"). A real stock 3.3.5a client needs none of this.
+numbering (a local SQL that rewrites `item_template.displayid` for every item, keeping the originals in a backup
+column; `server\local\` is git-ignored for that purpose). A real stock 3.3.5a client needs none of this.
 
 ## Ports
 

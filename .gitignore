@@ -22,3 +22,6 @@ client-patches/ghost-paladin/
 server/personalities/personalities.txt
 server/personalities/*.sql
 server/personalities/prompts.txt
+
+# working log, not part of the project
+SUMMARY.md

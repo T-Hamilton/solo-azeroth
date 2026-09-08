@@ -87,8 +87,8 @@ happens around you (dings, drops, deaths, duels), whisper back, and keep long-te
 so the one who called you trash last week still thinks so.
 
 How the mix, the volume and the model are chosen, and how to change them: [docs/LLM-CHAT.md](docs/LLM-CHAT.md).
-Client and LAN notes: [docs/CLIENT-SETUP.md](docs/CLIENT-SETUP.md). Running notes and pinned versions:
-[SUMMARY.md](SUMMARY.md).
+Client and LAN notes: [docs/CLIENT-SETUP.md](docs/CLIENT-SETUP.md). Pinned versions that are known to build
+together: the end of [HOWTO.md](HOWTO.md).
 
 ## Legal
 

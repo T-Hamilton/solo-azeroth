@@ -177,7 +177,7 @@ party), `.gm on`, `.tele orgrimmar`, `.modify speed 3`.
 - **The chat governor (how often bots speak, how long threads run):** the `OLLAMA` table in
   `setup\gen_configs.py`, explained knob by knob in `docs/LLM-CHAT.md`. Then `solo.cmd configs` and `.ollama reload`.
 - **Updating the server code:** `setup\clone-core.ps1` then `setup\build-core.cmd`, with the server stopped. If a
-  newer upstream breaks the build, `SUMMARY.md` lists the commits that are known to work together.
+  newer upstream breaks the build, the pinned versions at the end of this file are known to work together.
 
 ## Other PCs on your LAN
 
@@ -205,3 +205,16 @@ Still stuck: `setup\first_start.log` (first boot), `runtime\logs\Server.log` (wo
 (login), `mysql\logs\mysql-error.log`. With `"ChatDebug": 1` in `settings.local.json` (then `solo.cmd configs` and
 `.ollama reload`) the world log prints, every 30 seconds, exactly where the chat funnel stops:
 `ambient tick: bots=200 audience=72 due=31 rolled=7 topic=7 destination=1 governor=1 submitted=1`.
+
+## Pinned versions
+
+Built and booting together on 2026-09-07. `clone-core.ps1` pulls the tips of each; if a newer combination fails to
+build or boot, check out these.
+
+| Component | Commit |
+|---|---|
+| liyunfan1223/azerothcore-wotlk `Playerbot` branch | `413bea61a` (2026-09-04) |
+| liyunfan1223/mod-playerbots | `b949b50b` |
+| DustinHendrickson/mod-ollama-chat | `4befe61` + `server/patches/mod-ollama-chat-solo.diff` |
+| Ollama | 0.33.3 |
+| chat model | `huihui_ai/gemma-4-abliterated:12b` |

@@ -2,7 +2,7 @@
 #   liyunfan1223/azerothcore-wotlk (Playerbot branch)   the server core
 #   liyunfan1223/mod-playerbots                          the bots
 #   DustinHendrickson/mod-ollama-chat                    the LLM chat for the bots
-# Re-run to update (git pull on each). Pinned commits that are known to work together are listed in SUMMARY.md.
+# Re-run to update (git pull on each). Pinned commits that are known to work together are listed at the end of HOWTO.md.
 $ErrorActionPreference = "Stop"
 $server = Split-Path $PSScriptRoot -Parent
 $core = "$server\azerothcore"
