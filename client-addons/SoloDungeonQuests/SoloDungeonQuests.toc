@@ -1,0 +1,6 @@
+## Interface: 30300
+## Title: Solo Dungeon Quests
+## Notes: A GM panel that grants every quest tied to a chosen dungeon (organized by expansion). Uses .quest add, so a GM account is required.
+## SavedVariables: SoloDungeonQuestsUI
+DungeonQuestsData.lua
+SoloDungeonQuests.lua

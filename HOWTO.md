@@ -156,6 +156,11 @@ weapon skills, repair, 100 gold, 5 Potions of Experience). A **Potion of Experie
 every source for one hour; each extra potion adds another +100% (up to five) and restarts the hour. Lost the
 toolkit? Relog. More potions: the toolkit, or `.additem 2461 5`.
 
+A **Dungeon Quests** panel is an optional addon: copy `client-addons\SoloDungeonQuests` into the client's
+`Interface\AddOns`, then type `/dq` in game (GM account required). It lists every dungeon by expansion; click one to
+add all of that dungeon's quests to your log at once. The list is generated from the world database by
+`tools\build_dungeon_quests.py`; re-run it if quests change. The quest log holds 25 at a time.
+
 Commands, as GM: `.ollama status` (is the chat engine alive), `.ollama test hello` (one raw prompt, answer in the
 server console), `.ollama reload` (after changing chat settings), `.playerbots bot add <name>` (take a bot into your
 party), `.gm on`, `.tele orgrimmar`, `.modify speed 3`.
