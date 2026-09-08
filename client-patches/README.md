@@ -14,6 +14,16 @@ stock gameplay DBCs: `ChrClasses`, `CharBaseInfo`, every `Spell*`, `Skill*`, `Ta
 (50 files, 54 MB). Item and creature display tables are deliberately left as Ascension's: this project adapts the
 server's item display ids to them instead (`server\local`).
 
+**Ghost Paladin** (`tools\ghost_paladin.py build server\runtime\data\dbc <client Data dir> [--palette ghost|purple]`):
+every paladin spell effect recoloured from gold to a ghostly white/blue fade, paladin-only. The tool walks Spell.dbc
+(family 10) to SpellVisual, SpellVisualKit, SpellVisualEffectName, the M2 models and their textures; clones the 122
+models under `gh_` names with their skins, recolours 216 textures (written as uncompressed BLP2 under same-length
+`~` names, because the M2 stores fixed-length paths), rewrites particle / ribbon / vertex colour tracks inside the
+models, clones 96 visuals and 136 kits under new ids, and points the 740 paladin spells at them. Output lands in
+`client-patches\ghost-paladin\` (git-ignored, 76 MB) and `build_ascension_client_patch.py` folds it into patch-Z.
+Delete that folder to go back to gold. Every caster of a paladin spell gets the look: effects belong to the spell,
+not to the race.
+
 Build it with `tools\build_ascension_client_patch.py server\runtime\data\dbc [<stock GlueXML folders>]` (the GlueXML
 folders are only needed the first time; later builds reuse them from `build-patchZ`). The launcher's
 `prelaunch.local.ps1` copies it into the client's `Data\` when it changes (the game must be closed for that) and keeps
