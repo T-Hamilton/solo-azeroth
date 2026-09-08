@@ -11,3 +11,5 @@ links this folder into `azerothcore\modules\mod-solo`, `build-core.cmd` compiles
 
 Item ids are stock "Deprecated" entries (3878, 2461) renamed by `sql\world\mod-solo-items.sql`, so any 3.3.5 client
 already knows them.
+
+| **Extra race/class combos** | Undead Paladin (never existed in retail). Server side: start position, action bar and starting gear in `sql\world\mod-solo-class-combos.sql` (stats and spells need nothing on this core). Client side: the combo is added to `CharBaseInfo.dbc` inside patch-Z from `client-patches\class-combos.txt`, one `race class` pair per line; add a line, rebuild patch-Z, add the matching SQL rows. Mounts: Summon Warhorse gives a horse. | `sql\world\mod-solo-class-combos.sql` |

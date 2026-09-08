@@ -41,6 +41,38 @@ for f in names:
     shutil.copy(os.path.join(dbc_src, f), dbc)
 print("DBCs (%d): %s" % (len(names), " ".join(names)))
 
+
+def add_class_combos(dbc_path, combos_path):
+    """Append race/class pairs from class-combos.txt to CharBaseInfo.dbc (2 one-byte fields per record)."""
+    import struct
+    if not os.path.exists(combos_path):
+        return
+    combos = []
+    for line in open(combos_path, encoding="utf-8"):
+        line = line.split("#", 1)[0].strip()
+        if line:
+            r, c = line.split()
+            combos.append((int(r), int(c)))
+    if not combos:
+        return
+    with open(dbc_path, "rb") as f:
+        magic, n, fields, rs, ss = struct.unpack("<4sIIII", f.read(20))
+        data = bytearray(f.read(n * rs))
+        strings = f.read(ss)
+    assert magic == b"WDBC" and fields == 2 and rs == 2, "unexpected CharBaseInfo.dbc layout"
+    have = {tuple(data[i * 2:i * 2 + 2]) for i in range(n)}
+    added = [rc for rc in combos if rc not in have]
+    for r, c in added:
+        data += bytes([r, c])
+    with open(dbc_path, "wb") as f:
+        f.write(struct.pack("<4sIIII", magic, n + len(added), fields, rs, ss))
+        f.write(data)
+        f.write(strings)
+    print("CharBaseInfo.dbc: %d records, added %s" % (n + len(added), added or "nothing new"))
+
+
+add_class_combos(os.path.join(dbc, "CharBaseInfo.dbc"), os.path.join(root, "client-patches", "class-combos.txt"))
+
 out = os.path.join(root, "client-patches", "patch-Z.MPQ")
 subprocess.check_call([sys.executable, os.path.join(root, "tools", "mpq_writer.py"), out, build])
 subprocess.check_call([sys.executable, os.path.join(root, "tools", "mpq_verify.py"), out, build])
