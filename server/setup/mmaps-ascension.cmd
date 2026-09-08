@@ -11,8 +11,8 @@ set LOG=C:\Users\Rik\solo-azeroth\server\setup\mmaps-ascension.log
 set GEN=C:\Users\Rik\coa-rebuild\server\runtime\mmaps_generator.exe
 echo MMAPS ASCENSION START %DATE% %TIME% > %LOG%
 for %%i in (0 1 530 571) do (
-  echo === map %%i %TIME% >> %LOG%
+  echo === map %%i !TIME! >> %LOG%
   %GEN% %%i --threads 10 --silent >> %LOG% 2>&1
-  echo map %%i rc !ERRORLEVEL! %TIME% >> %LOG%
+  echo map %%i rc !ERRORLEVEL! !TIME! >> %LOG%
 )
 echo MMAPS ASCENSION DONE %DATE% %TIME% >> %LOG%
