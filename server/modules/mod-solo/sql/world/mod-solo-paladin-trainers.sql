@@ -77,3 +77,6 @@ VALUES
     (7100001, 9200101, 0, 0, 0, 1, 1, 0, 1866.0, 1553.0, 94.88, 2.5, 300, 0, 0, 0, 0, 0, 0, 0, 0, '', 0, 0, 'mod-solo: Forsaken paladin trainer, Deathknell'),
     (7100002, 9200102, 0, 0, 0, 1, 1, 0, 2258.5, 236.0, 33.72, 0.5, 300, 0, 0, 0, 0, 0, 0, 0, 0, '', 0, 0, 'mod-solo: Forsaken paladin trainer, Brill'),
     (7100003, 9200103, 0, 0, 0, 1, 1, 0, 1771.0, 415.0, -57.11, 0.12, 300, 0, 0, 0, 0, 0, 0, 0, 0, '', 0, 0, 'mod-solo: Forsaken paladin trainer, Undercity');
+
+-- the source trainers carry SmartAI scripts keyed by their own entry; the copies have none, so no AI name
+UPDATE creature_template SET AIName = '' WHERE entry IN (9200101, 9200102, 9200103);
