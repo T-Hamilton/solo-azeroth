@@ -12,5 +12,6 @@ links this folder into `azerothcore\modules\mod-solo`, `build-core.cmd` compiles
 Item ids are stock "Deprecated" entries (3878, 2461) renamed by `sql\world\mod-solo-items.sql`, so any 3.3.5 client
 already knows them.
 
+| **Paladin mounts for trainer-less races** | The Warhorse (13819) and Charger (23214) spells are race-locked in the skill tables, so no trainer offers them to an Undead paladin. Undead paladins learn them on login / level-up at 20 and 40 (riding skill still comes from the riding trainer in Brill). | `src\SoloPaladinMounts.cpp` |
 | **Forsaken paladin trainers** | Aldric the Redeemed (Deathknell, starter spells), Sister Ophelia Blackthorn (Brill) and Lord Corvane Duskbane (Undercity), full Horde paladin list, standing next to the warrior trainers. Copies of the Blood Elf trainers with Forsaken models. | `sql\world\mod-solo-paladin-trainers.sql` |
 | **Extra race/class combos** | Undead Paladin (never existed in retail). Server side: start position, action bar and starting gear in `sql\world\mod-solo-class-combos.sql` (stats and spells need nothing on this core). Client side: the combo is added to `CharBaseInfo.dbc` inside patch-Z from `client-patches\class-combos.txt`, one `race class` pair per line; add a line, rebuild patch-Z, add the matching SQL rows. Mounts: Summon Warhorse gives a horse. | `sql\world\mod-solo-class-combos.sql` |
