@@ -41,7 +41,7 @@ namespace
     enum CharAction : uint32
     {
         CHAR_HEAL = 1, CHAR_REVIVE, CHAR_COOLDOWNS, CHAR_LEVEL1, CHAR_LEVEL5, CHAR_LEVEL10, CHAR_MAXSKILL,
-        CHAR_REPAIR, CHAR_GOLD, CHAR_XPPOTIONS, CHAR_MOUNTS
+        CHAR_REPAIR, CHAR_GOLD, CHAR_XPPOTIONS, CHAR_MOUNTS, CHAR_RESPEC
     };
     constexpr uint32 ACTION_MAIN = 1000;   // "back to the main menu" in every submenu
 
@@ -220,6 +220,7 @@ namespace
         AddGossipItemFor(p, GOSSIP_ICON_MONEY_BAG,  "Add 100 gold",                    MENU_CHAR, CHAR_GOLD);
         AddGossipItemFor(p, GOSSIP_ICON_VENDOR,     "Give 5 Potions of Experience",    MENU_CHAR, CHAR_XPPOTIONS);
         AddGossipItemFor(p, GOSSIP_ICON_TAXI,       "Learn class mounts + riding",     MENU_CHAR, CHAR_MOUNTS);
+        AddGossipItemFor(p, GOSSIP_ICON_TRAINER,    "Reset talents (free respec)",     MENU_CHAR, CHAR_RESPEC);
         AddGossipItemFor(p, GOSSIP_ICON_CHAT,       "<- Back",                         MENU_CHAR, ACTION_MAIN);
         Send(p, item);
     }
@@ -315,6 +316,11 @@ namespace
                 Msg(p, "GM Toolkit: learned " + what + ". Check the General and Mounts tabs of the spellbook.");
                 break;
             }
+            case CHAR_RESPEC:
+                p->resetTalents(true);            // true = no gold cost, keep the talent points
+                p->SendTalentsInfoData(false);    // refresh the client's talent tab
+                Msg(p, "GM Toolkit: talents reset. Spend your points again in the talent tab.");
+                break;
             default: break;
         }
     }
