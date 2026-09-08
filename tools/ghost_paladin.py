@@ -409,10 +409,53 @@ CDI_TEX = (6, 7, 8)   # TextureVariation fields of CreatureDisplayInfo (3.3.5, 1
 
 
 MOUNT_CONTRAST = 1.8
+# The two-tone mount: what was gold/brown/red (plate, trim, leather) becomes ghost blue-white steel; what was blue
+# (the cloth under the barding) becomes the accent. "purple" = Forsaken violet, "green" = plague green.
+MOUNT_ACCENT = os.environ.get("GHOST_MOUNT_ACCENT", "purple")
+ACCENTS = {
+    "purple": [(18, 4, 40), (118, 40, 200), (232, 214, 255)],
+    "green":  [(4, 28, 10), (60, 190, 70), (215, 255, 210)],
+}
+
+
+def make_mount_mapper():
+    steel = make_mapper("ghost_mount", 1.0, MOUNT_CONTRAST)
+    lo, mid, hi = ACCENTS[MOUNT_ACCENT]
+
+    def grad(l):
+        if l < 0.5:
+            t = l / 0.5
+            return tuple(lo[i] + (mid[i] - lo[i]) * t for i in range(3))
+        t = (l - 0.5) / 0.5
+        return tuple(mid[i] + (hi[i] - mid[i]) * t for i in range(3))
+
+    def rgb(r, g, b):
+        mx, mn = max(r, g, b), min(r, g, b)
+        sat = 0.0 if mx == 0 else (mx - mn) / float(mx)
+        if sat < 0.18:
+            return steel(r, g, b)
+        # hue in degrees
+        d = float(mx - mn)
+        if mx == r:
+            h = (60.0 * ((g - b) / d)) % 360.0
+        elif mx == g:
+            h = 60.0 * ((b - r) / d) + 120.0
+        else:
+            h = 60.0 * ((r - g) / d) + 240.0
+        if 170.0 <= h <= 275.0:   # the blue cloth -> accent colour, same contrast stretch
+            lum = (0.30 * r + 0.59 * g + 0.11 * b) / 255.0
+            lum = min(1.0, max(0.0, 0.5 + (lum - 0.5) * MOUNT_CONTRAST))
+            w = min(1.0, (sat - 0.06) / 0.25)
+            tr, tg, tb = grad(lum)
+            return tuple(int(round(min(255.0, max(0.0, o * (1.0 - w) + t * w)))) for o, t in ((r, tr), (g, tg), (b, tb)))
+        return steel(r, g, b)    # gold, red, brown -> ghost steel
+
+    return rgb
 
 
 def build_mounts(client, rgb_unused, server_dbc_dir):
-    rgb = make_mapper("ghost_mount", 1.0, MOUNT_CONTRAST)   # the mounts get their own, higher-contrast curve
+    rgb = make_mount_mapper()   # the mounts get their own two-tone, higher-contrast curve
+    print("mounts: accent colour", MOUNT_ACCENT)
     cdi_raw = client.read("DBFilesClient\\CreatureDisplayInfo.dbc")
     cmd_raw = client.read("DBFilesClient\\CreatureModelData.dbc")
     if not cdi_raw or not cmd_raw:
