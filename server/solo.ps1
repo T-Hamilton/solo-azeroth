@@ -91,7 +91,9 @@ function Sync-Realmlist {
     # keep the realm row in the auth DB in step with settings (name / address / port)
     if (-not (Listening $S.MySQLPort)) { return }
     # flag=0 clears the OFFLINE bit (2) the worldserver sets when it shuts down; with it set the client shows the realm as Offline
-    $sql = "UPDATE realmlist SET name='$($S.RealmName)', address='$($S.RealmAddress)', localAddress='127.0.0.1', port=$($S.WorldPort), flag=0, gamebuild=12340 WHERE id=1;"
+    # icon = realm type shown to the client (0 Normal, 1 PvP); keep it in step with GameType (settings RealmType)
+    $realmType = if ($null -ne $S.RealmType) { [int]$S.RealmType } else { 0 }
+    $sql = "UPDATE realmlist SET name='$($S.RealmName)', address='$($S.RealmAddress)', localAddress='127.0.0.1', port=$($S.WorldPort), flag=0, icon=$realmType, gamebuild=12340 WHERE id=1;"
     $env:MYSQL_PWD = $S.DbPassword    # env var instead of --password: no stderr warning, and $LASTEXITCODE stays meaningful
     & "$($S.MySQLBin)\mysql.exe" "--user=$($S.DbUser)" "--host=127.0.0.1" "--port=$($S.MySQLPort)" "--database=$($S.DbPrefix)_auth" "--execute=$sql" 2>$null
     if ($LASTEXITCODE -eq 0) { Write-Host "realmlist: '$($S.RealmName)' -> $($S.RealmAddress):$($S.WorldPort)" } else { Write-Host "realmlist: not updated yet (auth DB not populated until the first worldserver boot)" }

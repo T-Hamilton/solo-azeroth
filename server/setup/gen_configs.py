@@ -74,6 +74,8 @@ WORLD = {
     "Updates.AutoSetup": "1",
     "Warden.Enabled": "0",
     "PlayerLimit": "100",
+    # realm type: 0 Normal/PvE, 1 PvP (auto-flags players in enemy + contested territory). Needs a restart.
+    "GameType": str(S.get("RealmType", 0)),
     "Expansion": "2",
     "MaxPlayerLevel": "80",
     "AllowTwoSide.Accounts": "1",

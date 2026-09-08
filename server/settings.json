@@ -14,6 +14,7 @@
   "ClientDir": "C:\\Games\\World of Warcraft 3.3.5a",
   "ClientExe": "Wow.exe",
   "RestoreRealmlistOnExit": true,
+  "RealmType": 1,
   "Bots": 200,
   "BotMinLevel": 1,
   "BotMaxLevel": 80,

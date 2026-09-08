@@ -182,6 +182,11 @@ party), `.gm on`, `.tele orgrimmar`, `.modify speed 3`.
 - **Profession speed:** Bot Settings > World > "Crafting skill-ups per craft" and "Gathering skill-ups per gather",
   then Reload. Default 5 (5 skill points per success, so professions level 5x faster). `"ProfessionRate"` in
   `settings.local.json` sets both.
+- **PvP flagging / realm type:** `"RealmType"` in `settings.local.json` (0 = Normal/PvE, 1 = PvP), then
+  `solo.cmd configs` and restart. On PvP the realm auto-flags players in enemy and contested territory, so an
+  Alliance character in a Horde zone (or the reverse) becomes attackable. Killing ordinary enemy vendors never
+  flags anyone on any realm type; only attacking enemy players or guards, or being in hostile territory on a PvP
+  realm, does.
 - **Ports, realm name, account, model:** `settings.local.json`, then `solo.cmd configs`, then restart.
 - **The chat governor (how often bots speak, how long threads run):** the `OLLAMA` table in
   `setup\gen_configs.py`, explained knob by knob in `docs/LLM-CHAT.md`. Then `solo.cmd configs` and `.ollama reload`.
