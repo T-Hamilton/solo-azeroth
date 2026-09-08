@@ -65,7 +65,7 @@ index 1bf4a26..761f673 100644
  // Topic engine
  // --------------------------------------------
 diff --git a/src/mod-ollama-chat_dispatch.cpp b/src/mod-ollama-chat_dispatch.cpp
-index f1364df..f180d78 100644
+index f1364df..d535e28 100644
 --- a/src/mod-ollama-chat_dispatch.cpp
 +++ b/src/mod-ollama-chat_dispatch.cpp
 @@ -11,6 +11,7 @@
@@ -76,7 +76,23 @@ index f1364df..f180d78 100644
  #include "Channel.h"
  #include "ChannelMgr.h"
  #include "GridNotifiers.h"
-@@ -263,7 +264,13 @@ namespace
+@@ -63,8 +64,15 @@ namespace
+         std::string       text;
+         uint32_t          emoteId = 0;
+         Clock::time_point deliverAt;
++        uint8_t           retries = 0;   // delivery attempts deferred by a pacing cooldown (solo-azeroth)
+     };
+ 
++    // solo-azeroth: a finished line that hits the channel cooldown is held
++    // and retried, not thrown away. Four workers finish within a second of
++    // each other, and dropping all but the first wasted two generations in
++    // three -- the log showed 171 generated, 62 delivered.
++    enum class DeliverResult : uint8_t { Delivered, Dropped, Retry };
++
+     // --- shared state -----------------------------------------------------
+ 
+     std::mutex              g_queueMutex;
+@@ -263,7 +271,13 @@ namespace
              case SRC_GENERAL_LOCAL:
              {
                  Channel* channel = ResolveChannel(bot, c.request.channelName);
@@ -91,7 +107,26 @@ index f1364df..f180d78 100644
                      return false;
  
                  // Checked before generating too; re-checked because the only
-@@ -348,7 +355,8 @@ namespace
+@@ -324,15 +338,15 @@ namespace
+         }
+     }
+ 
+-    void Deliver(const Completion& c, const OllamaWorldSnapshot& world)
++    DeliverResult Deliver(const Completion& c, const OllamaWorldSnapshot& world)
+     {
+         Player* bot = ObjectAccessor::FindConnectedPlayer(ObjectGuid(c.request.botGuid));
+         if (!bot || !bot->IsInWorld())
+-            return;
++            return DeliverResult::Dropped;
+ 
+         PlayerbotAI* botAI = PlayerbotsMgr::instance().GetPlayerbotAI(bot);
+         if (!botAI)
+-            return;
++            return DeliverResult::Dropped;
+ 
+         const ObjectGuid botGuid = bot->GetGUID();
+ 
+@@ -348,24 +362,25 @@ namespace
          // the same answer is correct -- suppressing it leaves the asker
          // staring at silence, which reads as the bot being broken rather than
          // as anti-repetition working.
@@ -101,7 +136,36 @@ index f1364df..f180d78 100644
          {
              ++g_droppedGovernor;
              if (g_DebugEnabled)
-@@ -381,6 +389,18 @@ namespace
+                 LOG_INFO("module.ollamachat",
+                          "[Ollama Chat] Bot {} reply suppressed as repetitive: '{}'",
+                          bot->GetName(), c.text);
+-            return;
++            return DeliverResult::Dropped;
+         }
+ 
+         if (!Governor_TryConsumeSend(botGuid, c.request.scopeKey, directAddress))
+         {
+-            ++g_droppedGovernor;
+-            if (g_DebugEnabled)
++            // Held, not dropped: the caller re-queues it a second or two out.
++            if (g_DebugEnabled && c.retries == 0)
+                 LOG_INFO("module.ollamachat",
+-                         "[Ollama Chat] Bot {} reply suppressed by cooldown/rate limit.",
++                         "[Ollama Chat] Bot {} reply held by cooldown/rate limit; retrying.",
+                          bot->GetName());
+-            return;
++            return DeliverResult::Retry;
+         }
+ 
+         Channel* channel = nullptr;
+@@ -375,12 +390,24 @@ namespace
+                 LOG_INFO("module.ollamachat",
+                          "[Ollama Chat] Bot {} had nowhere to send its reply ({}).",
+                          bot->GetName(), ChatChannelSourceLocalStr[c.request.source]);
+-            return;
++            return DeliverResult::Dropped;
+         }
+ 
          Governor_RecordUtterance(botGuid, c.request.scopeKey, c.text);
          ++g_totalDelivered;
  
@@ -120,7 +184,61 @@ index f1364df..f180d78 100644
          // This bot is now in a conversation with whoever it just answered, so
          // their next line in this scope is a turn in it rather than ambient
          // chatter. Only against a real person: an open conversation bypasses
-@@ -700,6 +720,11 @@ OllamaDispatchStats OllamaDispatch_GetStats()
+@@ -431,6 +458,7 @@ namespace
+             ProcessBotChatMessage(bot, c.text, c.request.source, channel,
+                                   static_cast<uint8_t>(c.request.chainDepth + 1));
+         }
++        return DeliverResult::Delivered;
+     }
+ }
+ 
+@@ -583,17 +611,43 @@ void OllamaDispatch_Update(uint32_t /*diff*/)
+     OllamaWorldSnapshot world;
+     world.Build();
+ 
+-    for (const Completion& c : due)
++    std::vector<Completion> held;
++    for (Completion& c : due)
+     {
+         try
+         {
+-            Deliver(c, world);
++            if (Deliver(c, world) == DeliverResult::Retry)
++            {
++                // Up to ~20 s of waiting for the channel to clear, staggered so
++                // the held lines do not all come back on the same tick.
++                if (c.retries < 12)
++                {
++                    ++c.retries;
++                    c.deliverAt = Clock::now() + std::chrono::milliseconds(900 + urand(0, 1400));
++                    held.push_back(std::move(c));
++                }
++                else
++                {
++                    ++g_droppedGovernor;
++                    if (g_DebugEnabled)
++                        LOG_INFO("module.ollamachat",
++                                 "[Ollama Chat] Bot {} reply dropped: channel stayed busy for 20 s.",
++                                 c.request.botName);
++                }
++            }
+         }
+         catch (const std::exception& e)
+         {
+             LOG_ERROR("module.ollamachat", "[Ollama Chat] Delivery exception: {}", e.what());
+         }
+     }
++
++    if (!held.empty())
++    {
++        std::lock_guard<std::mutex> lock(g_doneMutex);
++        for (Completion& c : held)
++            g_done.push_back(std::move(c));
++    }
+ }
+ 
+ void OllamaChat_DispatchEmoteReaction(Player* bot, Player* player, uint32_t textEmote)
+@@ -700,6 +754,11 @@ OllamaDispatchStats OllamaDispatch_GetStats()
  }
  
  Channel* OllamaResolveZoneChannel(Player* bot, uint32_t chatChannelId)
@@ -132,7 +250,7 @@ index f1364df..f180d78 100644
  {
      if (!bot)
          return nullptr;
-@@ -708,11 +733,9 @@ Channel* OllamaResolveZoneChannel(Player* bot, uint32_t chatChannelId)
+@@ -708,11 +767,9 @@ Channel* OllamaResolveZoneChannel(Player* bot, uint32_t chatChannelId)
      if (!mgr)
          return nullptr;
  
