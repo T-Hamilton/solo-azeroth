@@ -432,19 +432,23 @@ def build(dbc_dir, data_dir, palette):
     # 2. models: clone under gh_ names, retarget textures, recolour colour tracks, copy skins
     done_model = {}   # dbc file name -> new dbc file name
     stats = {"models": 0, "textures": 0, "skins": 0}
+    raw_models = {x.strip().lower() for x in os.environ.get("GHOST_RAW_MODELS", "").split(",") if x.strip()}
     for m in models:
         data = client.read(m)
         if not data:
             print("  model missing:", m)
             continue
         buf = bytearray(data)
-        for tofs, ln, fofs, name in m2_textures(buf):
-            new = ghost_tex(name)
-            if new:
-                assert len(new) == len(name)
-                buf[fofs:fofs + len(name)] = new.encode("latin1")
-                stats["textures"] += 1
-        patch_m2_colors(buf, rgb)
+        if m.lower() in raw_models:
+            print("  diagnostic: cloned untouched (original textures and colours):", m)
+        else:
+            for tofs, ln, fofs, name in m2_textures(buf):
+                new = ghost_tex(name)
+                if new:
+                    assert len(new) == len(name)
+                    buf[fofs:fofs + len(name)] = new.encode("latin1")
+                    stats["textures"] += 1
+            patch_m2_colors(buf, rgb)
         new_m2 = ghost_model_name(m)
         os.makedirs(os.path.dirname(out_path(new_m2)), exist_ok=True)
         open(out_path(new_m2), "wb").write(bytes(buf))
