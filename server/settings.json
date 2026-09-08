@@ -19,7 +19,7 @@
   "BotMaxLevel": 80,
   "BotMaps": "0,1,530,571",
   "OllamaUrl": "http://localhost:11434",
-  "OllamaModel": "hf.co/mlabonne/gemma-3-12b-it-abliterated-GGUF:Q4_K_M",
+  "OllamaModel": "huihui_ai/gemma-4-abliterated:12b",
   "OllamaParallel": 4,
   "Motd": "Welcome to Solo Azeroth. The bots are talking about you.",
   "ChatDebug": 0

@@ -85,7 +85,7 @@ WORLD = {
     "Motd": q(S["Motd"]),
     "CloseIdleConnections": "0",
     "SOAP.Enabled": "1", "SOAP.IP": q("127.0.0.1"), "SOAP.Port": str(S["SoapPort"]),
-    "Appender.Server": "2,6,0,Server.log,w",
+    "Appender.Server": "2,6,17,Server.log,w",   # 1 = timestamp every line, 16 = keep the previous log as Server.log.<date> on restart
 }
 AUTH = {
     "RealmServerPort": str(S["AuthPort"]),
@@ -115,6 +115,23 @@ BOTS = {
     "AiPlayerbot.RandomBotSayWithoutMaster": "0",
     "AiPlayerbot.SelfBotLevel": "1",                # 1 = GM may turn their own character into a bot with a command.
                                                     # NEVER 3: that attaches a bot AI to YOU on login, and the chat module then treats you as a bot.
+    # where the bots hang out: with 1500 bots over four continents a capital had 7 of them. Half of every teleport
+    # (was a quarter) goes to a capital, and the two main cities get most of that. Bots pick a new spot every
+    # 30-90 min (was 1-5 h). Apply live with:  .reload config  then  .rndbot reload  and  .rndbot teleport
+    "AiPlayerbot.ProbTeleToBankers": "0.5",
+    "AiPlayerbot.EnableWeightTeleToCityBankers": "1",
+    "AiPlayerbot.TeleToOrgrimmarWeight": "6",
+    "AiPlayerbot.TeleToUndercityWeight": "3",
+    "AiPlayerbot.TeleToSilvermoonCityWeight": "2",
+    "AiPlayerbot.TeleToThunderBluffWeight": "1",
+    "AiPlayerbot.TeleToStormwindWeight": "6",
+    "AiPlayerbot.TeleToIronforgeWeight": "3",
+    "AiPlayerbot.TeleToDarnassusWeight": "1",
+    "AiPlayerbot.TeleToExodarWeight": "1",
+    "AiPlayerbot.TeleToShattrathCityWeight": "2",
+    "AiPlayerbot.TeleToDalaranWeight": "2",
+    "AiPlayerbot.MinRandomBotTeleportInterval": "1800",
+    "AiPlayerbot.MaxRandomBotTeleportInterval": "5400",
 }
 # The chat governor, tuned for an always-on, bot-to-bot general chat (docs/LLM-CHAT.md explains each knob).
 SYSTEM_PROMPT = (
@@ -130,6 +147,7 @@ OLLAMA = {
     "OllamaChat.DebugShowFullPrompt": str(1 if S.get("ChatDebug", 0) >= 2 else 0),   # ChatDebug 2 = also log every full prompt sent to the model
     "OllamaChat.Url": S["OllamaUrl"].rstrip("/") + "/api/generate",
     "OllamaChat.Model": S["OllamaModel"],
+    "OllamaChat.ThinkMode": q("off"),      # Gemma 4 can "think"; a chat line does not need it and it doubles the latency
     "OllamaChat.NumPredict": "110",       # room for a two-sentence retort (chat lines are capped at 240 chars anyway)
     "OllamaChat.NumCtx": "4096",          # explicit context window: system + persona + 16 transcript lines + memories fit with room
     "OllamaChat.Temperature": "0.8",
@@ -208,6 +226,7 @@ PROMPT_KEYS = {
     "AMBIENT_TOPICS": "OllamaChat.RandomChatterPromptVariations",
     "AMBIENT_QUESTIONS": "OllamaChat.RandomChatterQuestionVariations",
     "AMBIENT_JOIN": "OllamaChat.Ambient.JoinLine",
+    "STYLE_HINTS": "OllamaChat.StyleHints",          # one per line; a random one fills {style_hint} in REPLY / AMBIENT
     "ADDRESSED": "OllamaChat.AddressedTemplate",
     "EVENT": "OllamaChat.EventChatterPromptTemplate",
     "DEFAULT_PERSONALITY": "OllamaChat.DefaultPersonalityPrompt",
@@ -236,7 +255,7 @@ def load_prompts(path):
     for name, lines in sections.items():
         if name not in PROMPT_KEYS or not lines:
             continue
-        text = "|".join(lines) if name in ("AMBIENT_TOPICS", "AMBIENT_QUESTIONS") else " ".join(lines)
+        text = "|".join(lines) if name in ("AMBIENT_TOPICS", "AMBIENT_QUESTIONS", "STYLE_HINTS") else " ".join(lines)
         out[PROMPT_KEYS[name]] = q(text.replace("\\", "").replace('"', "'"))   # the .conf value is a "..." string
     return out
 

@@ -18,10 +18,17 @@ The server only ever talks to Ollama over HTTP, so the model can live on another
 
 ## The model
 
-Default: `hf.co/mlabonne/gemma-3-12b-it-abliterated-GGUF:Q4_K_M` (7.3 GB, needs ~9 GB VRAM), pulled straight from Hugging Face by Ollama. The Ollama-library tags of this model only come in fp16 (24 GB) and q8 (13 GB), which do not fit a 16 GB card next to the game. It was chosen because it will
-actually play a nasty character. Ordinary instruction-tuned models (Llama, stock Gemma, Qwen) refuse insults,
+Default: `huihui_ai/gemma-4-abliterated:12b` (7.6 GB, ~10 GB VRAM), one `ollama pull` away. It was chosen because
+it will actually play a nasty character. Ordinary instruction-tuned models (Llama, stock Gemma, Qwen) refuse insults,
 soften trash talk and break character to add disclaimers, which kills the whole effect. "Abliterated" means the
 refusal behaviour was removed from the weights; the model keeps its knowledge and style, it just does not say no.
+
+The first pick was `hf.co/mlabonne/gemma-3-12b-it-abliterated-GGUF:Q4_K_M` (7.3 GB). Nastier by a hair, but that
+build drops the letter after an apostrophe in a quarter of its lines ("it' the best way", "let' go", "I'rew"), at
+any temperature or penalty, and once one such line is in the shared transcript every bot copies the habit. Replayed
+on a real in-game prompt, 12 lines each: Gemma 4 0 mangled, Gemma 3 4 mangled; same swearing when the personality
+asks for it; 0.8 s a line against 0.9. Switch back in Bot Settings (Model) if you prefer its voice; the response
+cleanup repairs the common cases either way.
 
 That cuts both ways. The model has no line of its own any more, so the line is drawn by the prompt. Ours, in
 `OllamaChat.SystemPrompt`: abuse is about gameplay, class, gear, guild, decisions and opinions, never about
@@ -34,7 +41,7 @@ Alternatives that fit a 16 GB card, all one `ollama pull` away, then set `Ollama
 |---|---|---|
 | `dolphin3:8b` | 4.9 GB | uncensored, twice as fast, noticeably dumber; drifts out of character over long threads |
 | `mistral-nemo:12b` | 7.1 GB | best natural voice, lightly censored: fine for gamer toxicity, may soften the worst characters |
-| `huihui_ai/gemma-4-abliterated:12b` | 7.6 GB | the newer Gemma generation, untested here |
+| `hf.co/mlabonne/gemma-3-12b-it-abliterated-GGUF:Q4_K_M` | 7.3 GB | the previous default; see above |
 | `huihui_ai/qwen3-abliterated:14b` | 9 GB | smarter, but a thinking model; slower replies |
 | `huihui_ai/mistral-small-abliterated:24b` | 14 GB | the quality pick if Ollama runs on a second machine |
 | `llama3.2:3b` | 2 GB | for small cards; it will refuse a lot |
@@ -119,6 +126,10 @@ Out of the box the module makes quips, not conversation. What the code did, and 
 
 | Only bots in your zone could speak or reply in General. | 1000 bots over four continents is a handful per zone, and the funnel showed it: `due=85 ... destination=0 submitted=0`, forty "nowhere to speak" per tick. Quiet the moment you left Mulgore. | `Chatter.ZoneChannelsAcrossMap`: any bot on your continent may speak and reply in the zone channel you are reading (it is joined to it at delivery). Off restores the same-zone rule. |
 
+| Every line opened "Ugh," / "Hmph," / "Seriously," and quoted the line above ("a moose all day?" nine times in a row). The prompt told the bot to "pick up its actual words", and one system prompt listed thirty adjectives that every bot then tried to be at once. | One voice, one phrase, all night. | The prompt says react in your own words and do not reuse phrases from the chat; the system prompt frames the adjectives as the range of the room and tells the bot its personality picks which; every prompt gets one random **style hint** ("open with a question", "under ten words", "no interjection at all", ...) from the STYLE_HINTS section of `prompts.txt`; a line that copies a run of five words from one of the last three lines is dropped. |
+| "Okay, here we go... " / "Right, here's my reply: " in front of the line. | | Stripped. |
+| The transcript ran into the instruction on one line (prompts.txt joins lines with spaces). | The model answered the instruction text. | The chat log always gets its own lines. |
+
 Knobs: `Chatter.ZoneChannelsAcrossMap`, `Transcript.Lines`, `Transcript.WindowSeconds`, `BotConversation.EngagedWindowSeconds`,
 `BotConversation.ChainLinesPerMinute`, `Ambient.HoldSeconds`, `Ambient.HoldPassPct`, `Repetition.CheckDirectAddress`
 (all under `OllamaChat.` in `setup\gen_configs.py`), and the ADDRESSED and AMBIENT_JOIN sections of
@@ -126,6 +137,11 @@ Knobs: `Chatter.ZoneChannelsAcrossMap`, `Transcript.Lines`, `Transcript.WindowSe
 
 ## Diagnosing "the bots are not talking"
 
+- `Server.log` lines carry a timestamp, and the previous log is kept as `Server.log.<date>` on every restart, so
+  "it was quiet at 18:40" can be checked. With `"ChatDebug": 2` every generation logs `Raw response:` (what the model
+  said before cleanup) and every channel line logs `Delivered to '<channel>' (... real players in channel: <names>)`.
+  If your name is in that list, the line reached your client; if you did not see it, look at the client's chat
+  filters or which channel tab you are on.
 - `.ollama status` in game: endpoint, model, queue depth, delivered and dropped counters. `0 submitted` after a few
   minutes with you standing among bots means the module doesn't see you as a real player: check SelfBotLevel.
 - `.ollama test say something rude about mages`: one raw prompt straight to the model; the reply is printed to

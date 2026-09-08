@@ -1,8 +1,32 @@
+diff --git a/src/mod-ollama-chat_api.cpp b/src/mod-ollama-chat_api.cpp
+index 0f8840e..5459d3f 100644
+--- a/src/mod-ollama-chat_api.cpp
++++ b/src/mod-ollama-chat_api.cpp
+@@ -342,6 +342,11 @@ OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind)
+ 
+         if (g_DebugShowFullPrompt && !result.thinking.empty())
+             LOG_INFO("module.ollamachat", "[Ollama Chat] Model reasoning: {}", result.thinking);
++
++        // solo-azeroth: what the model actually said, before any cleanup, so a
++        // mangled or truncated line can be blamed on the right stage.
++        if (g_DebugShowFullPrompt)
++            LOG_INFO("module.ollamachat", "[Ollama Chat] Raw response: {}", result.text);
+     }
+ 
+     return result;
 diff --git a/src/mod-ollama-chat_config.cpp b/src/mod-ollama-chat_config.cpp
-index ebde5db..9de560d 100644
+index ebde5db..739b97c 100644
 --- a/src/mod-ollama-chat_config.cpp
 +++ b/src/mod-ollama-chat_config.cpp
-@@ -124,6 +124,17 @@ float    g_RepetitionSimilarityThreshold = 0.72f;
+@@ -5,6 +5,7 @@
+ #include "mod-ollama-chat_rag.h"
+ #include "Config.h"
+ #include "Log.h"
++#include "Random.h"
+ #include "mod-ollama-chat_api.h"
+ #include "mod-ollama-chat_capability.h"
+ #include "mod-ollama-chat_dispatch.h"
+@@ -124,6 +125,17 @@ float    g_RepetitionSimilarityThreshold = 0.72f;
  uint32_t g_RepetitionWindowSeconds       = 1800;
  uint32_t g_OpenerHistorySize             = 8;
  
@@ -20,7 +44,40 @@ index ebde5db..9de560d 100644
  // --------------------------------------------
  // Topic engine
  // --------------------------------------------
-@@ -718,6 +729,18 @@ void LoadOllamaChatConfig()
+@@ -228,6 +240,14 @@ uint32_t    g_ConversationHistorySaveInterval = 10;
+ // --------------------------------------------
+ std::string g_RandomChatterPromptTemplate;
+ std::vector<std::string> g_RandomChatterPromptVariations;
++std::vector<std::string> g_StyleHints;
++
++std::string Ollama_PickStyleHint()
++{
++    if (g_StyleHints.empty())
++        return std::string();
++    return g_StyleHints[urand(0, static_cast<uint32>(g_StyleHints.size() - 1))];
++}
+ std::vector<std::string> g_RandomChatterQuestionVariations;
+ std::string g_EventChatterPromptTemplate;
+ std::string g_ChatPromptTemplate;
+@@ -571,6 +591,17 @@ void LoadOllamaChatConfig()
+         }
+     }
+ 
++    // solo-azeroth: style hints, one per line in prompts.txt, pipe-joined here
++    {
++        std::string hintsStr = sConfigMgr->GetOption<std::string>("OllamaChat.StyleHints", "");
++        g_StyleHints.clear();
++        std::stringstream ss(hintsStr);
++        std::string hint;
++        while (std::getline(ss, hint, '|'))
++            if (!hint.empty())
++                g_StyleHints.push_back(hint);
++    }
++
+     // Load random chatter question variations
+     std::string questionsStr = sConfigMgr->GetOption<std::string>("OllamaChat.RandomChatterQuestionVariations", "");
+     g_RandomChatterQuestionVariations.clear();
+@@ -718,6 +749,18 @@ void LoadOllamaChatConfig()
      g_RepetitionWindowSeconds         = sConfigMgr->GetOption<uint32_t>("OllamaChat.Repetition.WindowSeconds", 1800);
      g_OpenerHistorySize               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Repetition.OpenerHistorySize", 8);
  
@@ -40,10 +97,22 @@ index ebde5db..9de560d 100644
      g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);
      g_TopicWeightWorld                = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightWorld", 30);
 diff --git a/src/mod-ollama-chat_config.h b/src/mod-ollama-chat_config.h
-index 1bf4a26..761f673 100644
+index 1bf4a26..af8fc7f 100644
 --- a/src/mod-ollama-chat_config.h
 +++ b/src/mod-ollama-chat_config.h
-@@ -202,6 +202,20 @@ extern float    g_RepetitionSimilarityThreshold;
+@@ -96,6 +96,11 @@ extern uint32_t    g_ConversationHistorySaveInterval;
+ // --------------------------------------------
+ extern std::string g_RandomChatterPromptTemplate;
+ extern std::vector<std::string> g_RandomChatterPromptVariations;
++// solo-azeroth: one of these is handed to every reply/ambient prompt as
++// {style_hint}, so consecutive lines are shaped differently ("open with a
++// question", "under ten words", "no interjection"). Empty list = empty string.
++extern std::vector<std::string> g_StyleHints;
++std::string Ollama_PickStyleHint();
+ extern std::vector<std::string> g_RandomChatterQuestionVariations;
+ extern std::string g_EventChatterPromptTemplate;
+ extern std::string g_ChatPromptTemplate;
+@@ -202,6 +207,20 @@ extern float    g_RepetitionSimilarityThreshold;
  extern uint32_t g_RepetitionWindowSeconds;
  extern uint32_t g_OpenerHistorySize;
  
@@ -65,7 +134,7 @@ index 1bf4a26..761f673 100644
  // Topic engine
  // --------------------------------------------
 diff --git a/src/mod-ollama-chat_dispatch.cpp b/src/mod-ollama-chat_dispatch.cpp
-index f1364df..d535e28 100644
+index f1364df..8232e6e 100644
 --- a/src/mod-ollama-chat_dispatch.cpp
 +++ b/src/mod-ollama-chat_dispatch.cpp
 @@ -11,6 +11,7 @@
@@ -107,7 +176,19 @@ index f1364df..d535e28 100644
                      return false;
  
                  // Checked before generating too; re-checked because the only
-@@ -324,15 +338,15 @@ namespace
+@@ -273,6 +287,11 @@ namespace
+ 
+                 channel->Say(bot->GetGUID(), c.text, LANG_UNIVERSAL);
+                 outChannel = channel;
++                if (g_DebugEnabled)
++                    LOG_INFO("module.ollamachat",
++                             "[Ollama Chat] Delivered to '{}' (bot {} in zone {}; real players in channel: {})",
++                             channel->GetName(), bot->GetName(), bot->GetZoneId(),
++                             world.RealPlayerNamesInChannel(channel));
+                 return true;
+             }
+ 
+@@ -324,15 +343,15 @@ namespace
          }
      }
  
@@ -126,7 +207,7 @@ index f1364df..d535e28 100644
  
          const ObjectGuid botGuid = bot->GetGUID();
  
-@@ -348,24 +362,25 @@ namespace
+@@ -348,24 +367,25 @@ namespace
          // the same answer is correct -- suppressing it leaves the asker
          // staring at silence, which reads as the bot being broken rather than
          // as anti-repetition working.
@@ -158,7 +239,7 @@ index f1364df..d535e28 100644
          }
  
          Channel* channel = nullptr;
-@@ -375,12 +390,24 @@ namespace
+@@ -375,12 +395,24 @@ namespace
                  LOG_INFO("module.ollamachat",
                           "[Ollama Chat] Bot {} had nowhere to send its reply ({}).",
                           bot->GetName(), ChatChannelSourceLocalStr[c.request.source]);
@@ -184,7 +265,7 @@ index f1364df..d535e28 100644
          // This bot is now in a conversation with whoever it just answered, so
          // their next line in this scope is a turn in it rather than ambient
          // chatter. Only against a real person: an open conversation bypasses
-@@ -431,6 +458,7 @@ namespace
+@@ -431,6 +463,7 @@ namespace
              ProcessBotChatMessage(bot, c.text, c.request.source, channel,
                                    static_cast<uint8_t>(c.request.chainDepth + 1));
          }
@@ -192,7 +273,7 @@ index f1364df..d535e28 100644
      }
  }
  
-@@ -583,17 +611,43 @@ void OllamaDispatch_Update(uint32_t /*diff*/)
+@@ -583,17 +616,43 @@ void OllamaDispatch_Update(uint32_t /*diff*/)
      OllamaWorldSnapshot world;
      world.Build();
  
@@ -238,7 +319,7 @@ index f1364df..d535e28 100644
  }
  
  void OllamaChat_DispatchEmoteReaction(Player* bot, Player* player, uint32_t textEmote)
-@@ -700,6 +754,11 @@ OllamaDispatchStats OllamaDispatch_GetStats()
+@@ -700,6 +759,11 @@ OllamaDispatchStats OllamaDispatch_GetStats()
  }
  
  Channel* OllamaResolveZoneChannel(Player* bot, uint32_t chatChannelId)
@@ -250,7 +331,7 @@ index f1364df..d535e28 100644
  {
      if (!bot)
          return nullptr;
-@@ -708,11 +767,9 @@ Channel* OllamaResolveZoneChannel(Player* bot, uint32_t chatChannelId)
+@@ -708,11 +772,9 @@ Channel* OllamaResolveZoneChannel(Player* bot, uint32_t chatChannelId)
      if (!mgr)
          return nullptr;
  
@@ -289,7 +370,7 @@ index af5d2f3..a0c4ccc 100644
      std::string       prompt;
      OllamaRequestKind kind = OllamaRequestKind::ChatReply;
 diff --git a/src/mod-ollama-chat_governor.cpp b/src/mod-ollama-chat_governor.cpp
-index 1df3854..959b35e 100644
+index 1df3854..3190025 100644
 --- a/src/mod-ollama-chat_governor.cpp
 +++ b/src/mod-ollama-chat_governor.cpp
 @@ -45,14 +45,30 @@ namespace
@@ -433,7 +514,48 @@ index 1df3854..959b35e 100644
  // --- cooldowns and rate limits -------------------------------------------
  
  namespace
-@@ -599,12 +718,17 @@ void Governor_Update()
+@@ -488,6 +607,40 @@ bool Governor_IsRepetitive(ObjectGuid botGuid, const std::string& scopeKey,
+             return true;
+         }
+ 
++        // solo-azeroth: parroting. "A moose all day? Seriously, a moose all
++        // day?" -- nine bots in a row lifting the same phrase from the line
++        // above. Whole-line similarity misses it (the rest of each line
++        // differs); a run of five words copied from one of the last three
++        // lines in the scope does not.
++        {
++            const std::vector<std::string> candToks = Tokenize(norm, false);
++            uint32_t checked = 0;
++            for (auto it = scopeIt->second.history.rbegin();
++                 it != scopeIt->second.history.rend() && checked < 3;
++                 ++it, ++checked)
++            {
++                if (SecondsSince(it->when, now) > double(g_RepetitionWindowSeconds))
++                    continue;
++                const std::vector<std::string> prevToks = Tokenize(it->normalized, false);
++                if (candToks.size() < 5 || prevToks.size() < 5)
++                    continue;
++                bool copied = false;
++                for (size_t a = 0; a + 5 <= candToks.size() && !copied; ++a)
++                    for (size_t b = 0; b + 5 <= prevToks.size(); ++b)
++                    {
++                        bool same = true;
++                        for (size_t k = 0; k < 5; ++k)
++                            if (candToks[a + k] != prevToks[b + k]) { same = false; break; }
++                        if (same) { copied = true; break; }
++                    }
++                if (copied)
++                {
++                    ++g_stats.blockedRepetition;
++                    return true;
++                }
++            }
++        }
++
+         // Opener collision: every bot starting "aye lad" is a distinct problem
+         // from every bot saying the same whole line, and whole-line similarity
+         // does not catch it.
+@@ -599,12 +752,17 @@ void Governor_Update()
      {
          ScopeState& s = it->second;
          TrimWindow(s.sendTimes, now, 60.0);
@@ -452,7 +574,7 @@ index 1df3854..959b35e 100644
                            SecondsSince(s.lastHuman, now) > staleAfter &&
                            SecondsSince(s.lastSend, now)  > staleAfter;
  
-@@ -631,6 +755,16 @@ void Governor_Update()
+@@ -631,6 +789,16 @@ void Governor_Update()
  
              pit = pit->second.empty() ? bot.conversations.erase(pit) : std::next(pit);
          }
@@ -510,7 +632,7 @@ index 5f5611d..2465415 100644
  
  void Governor_OnPlayerLogout(ObjectGuid guid);
 diff --git a/src/mod-ollama-chat_handler.cpp b/src/mod-ollama-chat_handler.cpp
-index 264d845..b5f3449 100644
+index 264d845..fc8a9c2 100644
 --- a/src/mod-ollama-chat_handler.cpp
 +++ b/src/mod-ollama-chat_handler.cpp
 @@ -126,8 +126,14 @@ static bool OllamaIsDirectAddress(Player* bot, Player* speaker, ChatChannelSourc
@@ -714,7 +836,7 @@ index 264d845..b5f3449 100644
      if (!bot || !player) {
          return "";
      }
-@@ -1957,6 +2037,17 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
+@@ -1957,6 +2037,22 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
      std::string chatHistory         = GetBotHistoryPrompt(botGuid, playerGuid, playerMessage);
      std::string sentimentInfo       = GetSentimentPromptAddition(bot, player);
  
@@ -723,6 +845,11 @@ index 264d845..b5f3449 100644
 +    // remembers -- all available to the template, so the facts can come
 +    // before the instruction instead of being appended after it.
 +    std::string transcript          = contextKey.empty() ? std::string() : Governor_TranscriptText(contextKey);
++    // solo-azeroth: prompts.txt joins its lines with spaces, so without this the
++    // first transcript line ran on from "oldest first:" and the instruction ran
++    // on from the last one. Own lines for the chat log, whatever the template.
++    if (!transcript.empty())
++        transcript = "\n" + transcript + "\n";
 +    std::string addressed           = directAddress
 +                                        ? SafeFormat(g_AddressedTemplate, fmt::arg("bot_name", botName), fmt::arg("player_name", playerName))
 +                                        : std::string();
@@ -732,13 +859,14 @@ index 264d845..b5f3449 100644
      // Retrieve RAG information if enabled
      std::string ragInfo;
      if (g_EnableRAG && g_RAGSystem) {
-@@ -2009,7 +2100,17 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
+@@ -2009,7 +2105,18 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
          fmt::arg("player_message", playerMessage),
          fmt::arg("extra_info", extraInfo),
          fmt::arg("chat_history", chatHistory),
 -        fmt::arg("sentiment_info", sentimentInfo)
 +        fmt::arg("sentiment_info", sentimentInfo),
 +        fmt::arg("transcript", transcript),
++        fmt::arg("style_hint", Ollama_PickStyleHint()),
 +        fmt::arg("addressed", addressed),
 +        fmt::arg("memory_info", memoryInfo),
 +        fmt::arg("bot_race", botRace),
@@ -751,7 +879,7 @@ index 264d845..b5f3449 100644
      );
  
      // Add RAG information to the prompt if available
-@@ -2024,7 +2125,9 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
+@@ -2024,7 +2131,9 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
  
      // What this bot remembers, and how it feels about people. Bounded by
      // their own token budgets, so this cannot grow the prompt without limit.
@@ -777,7 +905,7 @@ index 75b1e48..3395264 100644
  
  // Bounded, distance-sorted snapshot helpers used by the prompt builders and
 diff --git a/src/mod-ollama-chat_random.cpp b/src/mod-ollama-chat_random.cpp
-index 710070b..b4e5af7 100644
+index 710070b..fe254ca 100644
 --- a/src/mod-ollama-chat_random.cpp
 +++ b/src/mod-ollama-chat_random.cpp
 @@ -86,7 +86,30 @@ namespace
@@ -836,13 +964,18 @@ index 710070b..b4e5af7 100644
      {
          PlayerbotAI* botAI = PlayerbotsMgr::instance().GetPlayerbotAI(bot);
          if (!botAI || !botAI->GetChatHelper())
-@@ -155,7 +179,19 @@ namespace
+@@ -155,7 +179,24 @@ namespace
              fmt::arg("bot_map", OllamaContinentName(bot)),
              fmt::arg("bot_personality", personalityPrompt),
              fmt::arg("bot_personality_name", personality),
 -            fmt::arg("environment_info", environmentInfo));
 +            fmt::arg("environment_info", environmentInfo),
-+            fmt::arg("transcript", Governor_TranscriptText(scopeKey)),
++            fmt::arg("transcript", [&]() {
++                // solo-azeroth: own lines for the chat log (prompts.txt joins its lines with spaces)
++                std::string t = Governor_TranscriptText(scopeKey);
++                return t.empty() ? t : "\n" + t + "\n";
++            }()),
++            fmt::arg("style_hint", Ollama_PickStyleHint()),
 +            fmt::arg("memory_info", Memory_BuildPromptSection(bot, nullptr)));
 +
 +        // A live conversation in this scope: the line joins it instead of
@@ -857,7 +990,7 @@ index 710070b..b4e5af7 100644
  
          // Statement or question. At roleplay strictness 2 the in-character
          // lists replace the shipped ones, which otherwise push bots toward
-@@ -185,7 +221,8 @@ namespace
+@@ -185,7 +226,8 @@ namespace
              prompt += " " + questions[PickIndex(questions.size())];
          }
  
@@ -867,7 +1000,7 @@ index 710070b..b4e5af7 100644
          prompt += Roleplay_BuildVoicePrompt(bot);
          prompt += Expression_BuildGesturePrompt();
  
-@@ -278,7 +315,12 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+@@ -278,7 +320,12 @@ void OllamaBotRandomChatter::HandleRandomChatter()
      world.Build();
  
      if (world.Empty())
@@ -880,7 +1013,7 @@ index 710070b..b4e5af7 100644
  
      auto const& allPlayers = ObjectAccessor::GetPlayers();
  
-@@ -294,6 +336,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+@@ -294,6 +341,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
          if (!ai || !ai->IsBotAI())
              continue;
  
@@ -888,7 +1021,7 @@ index 710070b..b4e5af7 100644
          if (g_DisableRepliesInCombat && bot->IsInCombat())
              continue;
  
-@@ -307,6 +350,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+@@ -307,6 +355,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
  
          if (!guildAudience && !nearRealPlayer)
              continue;
@@ -896,7 +1029,7 @@ index 710070b..b4e5af7 100644
  
          // Schedule.
          {
-@@ -320,6 +364,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+@@ -320,6 +369,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
              if (now < it->second)
                  continue;
          }
@@ -904,7 +1037,7 @@ index 710070b..b4e5af7 100644
  
          auto reschedule = [&]()
          {
-@@ -332,6 +377,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+@@ -332,6 +382,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
              reschedule();
              continue;
          }
@@ -912,7 +1045,7 @@ index 710070b..b4e5af7 100644
  
          // Pick what to talk about. Weighted toward the people and the world
          // around the bot rather than its own inventory.
-@@ -341,6 +387,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+@@ -341,6 +392,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
              reschedule();
              continue;
          }
@@ -920,7 +1053,7 @@ index 710070b..b4e5af7 100644
  
          ChatChannelSourceLocal source = SRC_SAY_LOCAL;
          std::string channelName;
-@@ -354,6 +401,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+@@ -354,6 +406,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
              reschedule();
              continue;
          }
@@ -928,7 +1061,7 @@ index 710070b..b4e5af7 100644
  
          // Same inputs the reply path uses, so ambient lines and replies in the
          // same channel share one cooldown, rate limit and repetition history.
-@@ -363,13 +411,24 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+@@ -363,13 +416,24 @@ void OllamaBotRandomChatter::HandleRandomChatter()
              source == SRC_GUILD_LOCAL ? bot->GetGuildId() : 0,
              bot->GetZoneId());
  
@@ -954,7 +1087,7 @@ index 710070b..b4e5af7 100644
          if (prompt.empty())
          {
              reschedule();
-@@ -390,8 +449,16 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+@@ -390,8 +454,16 @@ void OllamaBotRandomChatter::HandleRandomChatter()
          request.triggerBotReplies = true;
  
          if (OllamaDispatch_Submit(std::move(request)))
@@ -972,10 +1105,18 @@ index 710070b..b4e5af7 100644
 +                 cBots, cAud, cDue, cRoll, cTopic, cDest, cGov, cSent);
  }
 diff --git a/src/mod-ollama-chat_response.cpp b/src/mod-ollama-chat_response.cpp
-index 0e7368a..c8fdd90 100644
+index 0e7368a..145f3d4 100644
 --- a/src/mod-ollama-chat_response.cpp
 +++ b/src/mod-ollama-chat_response.cpp
-@@ -370,6 +370,65 @@ std::string ClampReplyLength(const std::string& text, uint32_t maxLen)
+@@ -4,6 +4,7 @@
+ 
+ #include <algorithm>
+ #include <cctype>
++#include <cstring>
+ #include <vector>
+ 
+ namespace
+@@ -370,6 +371,169 @@ std::string ClampReplyLength(const std::string& text, uint32_t maxLen)
  
  // --------------------------------------------------------------------------
  
@@ -1036,12 +1177,116 @@ index 0e7368a..c8fdd90 100644
 +        const size_t n = SpeakerPrefixLength(text);
 +        return n > 0 ? text.substr(n) : text;
 +    }
++
++    // solo-azeroth: the Q4 abliterated model now and then drops the letter
++    // after an apostrophe ("it' the best way", "let' go"), and once such a
++    // line sits in the shared transcript every later bot copies the habit.
++    // Restore the unambiguous cases: stems that in chat only ever take 's.
++    // "I'" / "they'" / "we'" stay as they are (could be 'm, 've, 're, 'd).
++    std::string RepairContractions(const std::string& text)
++    {
++        static const char* const stems[] = {
++            "it", "that", "what", "there", "here", "let", "who", "where", "how",
++            "he", "she", "everyone", "someone", "everything", "nothing",
++            "something", "anyone", "this"
++        };
++
++        std::string out;
++        out.reserve(text.size() + 8);
++
++        for (size_t i = 0; i < text.size(); ++i)
++        {
++            const char c = text[i];
++            if (c != '\'' || i == 0 || !std::isalpha(static_cast<unsigned char>(text[i - 1])))
++            {
++                out.push_back(c);
++                continue;
++            }
++
++            const bool boundary = (i + 1 >= text.size()) ||
++                                  IsSpace(static_cast<unsigned char>(text[i + 1])) ||
++                                  std::strchr(".,!?;:\")-", text[i + 1]) != nullptr;
++            if (!boundary)
++            {
++                out.push_back(c);
++                continue;
++            }
++
++            size_t ws = out.size();
++            while (ws > 0 && std::isalpha(static_cast<unsigned char>(out[ws - 1])))
++                --ws;
++            std::string word = out.substr(ws);
++            for (char& ch : word)
++                ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
++
++            bool hit = false;
++            for (const char* s : stems)
++                if (word == s) { hit = true; break; }
++
++            out.push_back('\'');
++            if (hit)
++                out.push_back('s');
++        }
++
++        return out;
++    }
++
++    // solo-azeroth: "Okay, here we go... <line>", "Right, here's my reply: <line>",
++    // "Here's my line: <line>". The model announces the line before typing it;
++    // drop the announcement when it ends in a colon or an ellipsis close to the
++    // start, and only when something is left.
++    std::string StripLeadIn(const std::string& text)
++    {
++        const size_t window = std::min<size_t>(text.size(), 48);
++        std::string lower = text.substr(0, window);
++        for (char& ch : lower)
++            ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
++
++        static const char* const tells[] = {
++            "here's my", "here is my", "my reply", "my line", "my response",
++            "here we go", "here goes", "here's what i'd say"
++        };
++
++        size_t tell = std::string::npos;
++        for (const char* t : tells)
++        {
++            const size_t p = lower.find(t);
++            if (p != std::string::npos && (tell == std::string::npos || p < tell))
++                tell = p;
++        }
++        if (tell == std::string::npos)
++            return text;
++
++        size_t end = std::string::npos;
++        const size_t limit = std::min(text.size(), tell + 40);
++        for (size_t i = tell; i < limit; ++i)
++        {
++            if (text[i] == ':')
++            {
++                end = i + 1;
++                break;
++            }
++            if (text[i] == '.' && i + 1 < text.size() && text[i + 1] == '.')
++            {
++                size_t j = i;
++                while (j < text.size() && text[j] == '.')
++                    ++j;
++                end = j;
++                break;
++            }
++        }
++        if (end == std::string::npos)
++            return text;
++
++        std::string rest = Trim(text.substr(end));
++        return rest.size() >= 8 ? rest : text;
++    }
 +}
 +
  std::string ProcessLlmResponse(const std::string& raw,
                                 const std::string& botName,
                                 uint32_t* outEmoteId)
-@@ -386,6 +445,8 @@ std::string ProcessLlmResponse(const std::string& raw,
+@@ -386,6 +550,8 @@ std::string ProcessLlmResponse(const std::string& raw,
      if (s.empty())
          return "";
  
@@ -1050,19 +1295,52 @@ index 0e7368a..c8fdd90 100644
      // Before StripMarkdown, not after. StripMarkdown removes every '*', so by
      // the time this used to run the "*waves*" gesture form could never match --
      // only [emote:name] and /wave survived. ExtractEmoteTag leaves the words of
-@@ -403,6 +464,7 @@ std::string ProcessLlmResponse(const std::string& raw,
+@@ -403,6 +569,8 @@ std::string ProcessLlmResponse(const std::string& raw,
      s = CollapseWhitespace(s);
      s = UnwrapQuotedReply(s);
      s = StripSpeakerPrefix(s, botName);
 +    s = StripAnySpeakerPrefix(s);   // "Mushotko: ..." leaking someone else's label
++    s = StripLeadIn(s);             // "Okay, here we go... " / "Right, here's my reply: "
  
      if (g_ResponseStripDecorativeUnicode)
          s = StripDecorativeUnicode(s);
+@@ -411,6 +579,7 @@ std::string ProcessLlmResponse(const std::string& raw,
+     // that were not on the outside before.
+     s = UnwrapQuotedReply(s);
+     s = CollapseWhitespace(s);
++    s = RepairContractions(s);      // after the smart quotes were folded to '
+     s = ClampReplyLength(s, g_MaxReplyLength);
+ 
+     return Trim(s);
 diff --git a/src/mod-ollama-chat_world.cpp b/src/mod-ollama-chat_world.cpp
-index 5793c70..d668edc 100644
+index 5793c70..7f2714a 100644
 --- a/src/mod-ollama-chat_world.cpp
 +++ b/src/mod-ollama-chat_world.cpp
-@@ -140,3 +140,27 @@ bool OllamaWorldSnapshot::RealPlayerInZoneAndFaction(Player* who) const
+@@ -112,6 +112,23 @@ bool OllamaWorldSnapshot::RealPlayerInChannel(Channel* channel) const
+     return false;
+ }
+ 
++std::string OllamaWorldSnapshot::RealPlayerNamesInChannel(Channel* channel) const
++{
++    std::string names;
++    if (!channel)
++        return names;
++
++    for (Player* player : realPlayers)
++    {
++        if (!player->IsInChannel(channel))
++            continue;
++        if (!names.empty())
++            names += ", ";
++        names += player->GetName();
++    }
++    return names;
++}
++
+ bool OllamaGroupHasRealPlayer(Player* who)
+ {
+     Group* group = who ? who->GetGroup() : nullptr;
+@@ -140,3 +157,27 @@ bool OllamaWorldSnapshot::RealPlayerInZoneAndFaction(Player* who) const
      }
      return false;
  }
@@ -1091,10 +1369,10 @@ index 5793c70..d668edc 100644
 +    return best;
 +}
 diff --git a/src/mod-ollama-chat_world.h b/src/mod-ollama-chat_world.h
-index 52f9cde..2fd3104 100644
+index 52f9cde..25161f8 100644
 --- a/src/mod-ollama-chat_world.h
 +++ b/src/mod-ollama-chat_world.h
-@@ -91,6 +91,13 @@ struct OllamaWorldSnapshot
+@@ -91,10 +91,21 @@ struct OllamaWorldSnapshot
      // being in the channel. Use RealPlayerInChannel for the real answer.
      bool RealPlayerInZoneAndFaction(Player* who) const;
  
@@ -1108,3 +1386,11 @@ index 52f9cde..2fd3104 100644
      // The actual audience tests. Nothing may be sent to the LLM for a
      // destination unless one of these says a human would see it -- an answer
      // nobody reads still costs a full generation.
+     bool RealPlayerInChannel(Channel* channel) const;
++
++    // solo-azeroth: "Rik, Testdummy" -- who, of the real players, is a member
++    // of this channel right now. For the delivery log.
++    std::string RealPlayerNamesInChannel(Channel* channel) const;
+ };
+ 
+ #endif // MOD_OLLAMA_CHAT_WORLD_H
