@@ -177,7 +177,7 @@ party), `.gm on`, `.tele orgrimmar`, `.modify speed 3`.
   3 = every quest drop lands three times as often as on retail; 1 = retail. Or `"QuestDropRate"` in
   `settings.local.json`.
 - **Levelling speed:** Bot Settings > World > "Quest experience" and "Kill experience", then Reload. The defaults
-  are 2x quest XP and 1x kill XP (`"QuestXPRate"`, `"KillXPRate"` in `settings.local.json`). Potions of
+  are 2x quest XP and 3x kill XP (`"QuestXPRate"`, `"KillXPRate"` in `settings.local.json`). Potions of
   Experience multiply on top of these.
 - **Ports, realm name, account, model:** `settings.local.json`, then `solo.cmd configs`, then restart.
 - **The chat governor (how often bots speak, how long threads run):** the `OLLAMA` table in
