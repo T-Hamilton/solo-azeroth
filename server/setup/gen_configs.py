@@ -132,8 +132,10 @@ OLLAMA = {
     "OllamaChat.Model": S["OllamaModel"],
     "OllamaChat.NumPredict": "110",       # room for a two-sentence retort (chat lines are capped at 240 chars anyway)
     "OllamaChat.NumCtx": "4096",          # explicit context window: system + persona + 16 transcript lines + memories fit with room
-    "OllamaChat.Temperature": "0.9",
-    "OllamaChat.RandomChatterQuestionChance": "20",
+    "OllamaChat.Temperature": "0.8",
+    # the module ships its own list of 20 "ask the channel about badges / Ulduar / dual spec" questions and used it
+    # for 20% of ambient lines. Off unless prompts.txt has an AMBIENT_QUESTIONS section (then 30%).
+    "OllamaChat.RandomChatterQuestionChance": "0",
     # the conversation layer (our module patch): shared transcript per channel, partner stickiness, ambient hold
     "OllamaChat.Transcript.Lines": "10",   # enough context to follow a thread; more and the model imitates the crowd instead of answering
     "OllamaChat.Transcript.WindowSeconds": "600",
@@ -169,8 +171,7 @@ OLLAMA = {
     "OllamaChat.BotConversation.MaxChainDepth": "6",     # an argument may run six bot-to-bot hops before a person has to feed it
     "OllamaChat.BotConversation.ChanceDecayPct": "75",
     "OllamaChat.BotConversation.ChainLinesPerMinute": "16",  # hard cap on bot-to-bot lines per channel per minute; replies to a person are not counted
-    "OllamaChat.RepeatPenalty": "1.15",                  # discourage parroting the transcript's words and openers
-    "OllamaChat.PresencePenalty": "0.3",
+    "OllamaChat.RepeatPenalty": "1.05",                  # 1.15 + presence penalty made the Q4 model mangle words ("He'ly", "raidning"); keep it gentle
     "OllamaChat.BotConversation.RequireRecentHuman": "0",
     # pacing: a bot mid-exchange is exempt from these (direct address); they only pace the crowd
     "OllamaChat.Cooldown.PerBotSeconds": "10",
@@ -205,6 +206,7 @@ PROMPT_KEYS = {
     "REPLY_INFO": "OllamaChat.ChatExtraInfoTemplate",
     "AMBIENT": "OllamaChat.RandomChatterPromptTemplate",
     "AMBIENT_TOPICS": "OllamaChat.RandomChatterPromptVariations",
+    "AMBIENT_QUESTIONS": "OllamaChat.RandomChatterQuestionVariations",
     "AMBIENT_JOIN": "OllamaChat.Ambient.JoinLine",
     "ADDRESSED": "OllamaChat.AddressedTemplate",
     "EVENT": "OllamaChat.EventChatterPromptTemplate",
@@ -234,13 +236,15 @@ def load_prompts(path):
     for name, lines in sections.items():
         if name not in PROMPT_KEYS or not lines:
             continue
-        text = "|".join(lines) if name == "AMBIENT_TOPICS" else " ".join(lines)
+        text = "|".join(lines) if name in ("AMBIENT_TOPICS", "AMBIENT_QUESTIONS") else " ".join(lines)
         out[PROMPT_KEYS[name]] = q(text.replace("\\", "").replace('"', "'"))   # the .conf value is a "..." string
     return out
 
 
 PROMPTS = load_prompts(os.path.join(SERVER, "personalities", "prompts.txt"))
 OLLAMA.update(PROMPTS)
+if "OllamaChat.RandomChatterQuestionVariations" in PROMPTS:
+    OLLAMA["OllamaChat.RandomChatterQuestionChance"] = "30"
 if PROMPTS:
     print("prompts.txt: %d sections applied (%s)" % (len(PROMPTS), ", ".join(k for k in PROMPT_KEYS if PROMPT_KEYS[k] in PROMPTS)))
 
