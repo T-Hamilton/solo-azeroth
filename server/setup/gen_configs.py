@@ -139,7 +139,7 @@ OLLAMA = {
     "OllamaChat.Transcript.WindowSeconds": "600",
     "OllamaChat.BotConversation.EngagedWindowSeconds": "150",
     "OllamaChat.Ambient.HoldSeconds": "45",
-    "OllamaChat.Ambient.HoldPassPct": "40",
+    "OllamaChat.Ambient.HoldPassPct": "60",
     "OllamaChat.MaxConcurrentQueries": str(S["OllamaParallel"]),
     "OllamaChat.WorkerThreads": str(S["OllamaParallel"]),
     "OllamaChat.SystemPrompt": q(SYSTEM_PROMPT),
@@ -168,7 +168,7 @@ OLLAMA = {
     "OllamaChat.PlayerReplyChance.Channel": "70",
     "OllamaChat.BotConversation.MaxChainDepth": "6",     # an argument may run six bot-to-bot hops before a person has to feed it
     "OllamaChat.BotConversation.ChanceDecayPct": "75",
-    "OllamaChat.BotConversation.ChainLinesPerMinute": "12",  # hard cap on bot-to-bot lines per channel per minute; replies to a person are not counted
+    "OllamaChat.BotConversation.ChainLinesPerMinute": "16",  # hard cap on bot-to-bot lines per channel per minute; replies to a person are not counted
     "OllamaChat.RepeatPenalty": "1.15",                  # discourage parroting the transcript's words and openers
     "OllamaChat.PresencePenalty": "0.3",
     "OllamaChat.BotConversation.RequireRecentHuman": "0",
