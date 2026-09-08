@@ -170,8 +170,11 @@ PALETTES = {
 # Additive layers add light to whatever is under them; blue adds far less visible light to green ground than yellow
 # did, so a few ground decals need a brightness push to stay legible. Texture name (lower case) -> luminance gain.
 TEXTURE_GAIN = {
-    "spells\\lavagroundholy.blp": 1.7,        # Consecration's cracks
-    "spells\\t_vfx_fire01_a32_blank4.blp": 1.3,
+    # Consecration is three additive layers on the ground: the red glow disc, the cracks, an animated fire sheet.
+    # Red and orange are dark in luminance terms, so the recolour left a faint blue smudge nobody could see.
+    "creature\\golemharvest\\red_glow3.blp": 2.6,
+    "spells\\lavagroundholy.blp": 2.6,
+    "spells\\t_vfx_fire01_a32_blank4.blp": 1.8,
 }
 
 
