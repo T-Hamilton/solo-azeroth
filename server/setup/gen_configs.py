@@ -10,10 +10,11 @@ RUNTIME = os.path.join(SERVER, "runtime")
 
 
 def load_settings():
-    s = json.load(open(os.path.join(SERVER, "settings.json"), encoding="utf-8"))
+    # utf-8-sig: PowerShell (the Bot Settings window) writes the local file with a byte-order mark
+    s = json.load(open(os.path.join(SERVER, "settings.json"), encoding="utf-8-sig"))
     local = os.path.join(SERVER, "settings.local.json")
     if os.path.exists(local):
-        s.update(json.load(open(local, encoding="utf-8")))
+        s.update(json.load(open(local, encoding="utf-8-sig")))
     return s
 
 
@@ -138,7 +139,7 @@ OLLAMA = {
     "OllamaChat.Transcript.WindowSeconds": "600",
     "OllamaChat.BotConversation.EngagedWindowSeconds": "150",
     "OllamaChat.Ambient.HoldSeconds": "45",
-    "OllamaChat.Ambient.HoldPassPct": "25",
+    "OllamaChat.Ambient.HoldPassPct": "40",
     "OllamaChat.MaxConcurrentQueries": str(S["OllamaParallel"]),
     "OllamaChat.WorkerThreads": str(S["OllamaParallel"]),
     "OllamaChat.SystemPrompt": q(SYSTEM_PROMPT),
@@ -149,7 +150,7 @@ OLLAMA = {
     "OllamaChat.MinRandomInterval": "25",
     "OllamaChat.MaxRandomInterval": "110",
     "OllamaChat.RandomChatterRealPlayerDistance": "100000",
-    "OllamaChat.RandomChatterBotCommentChance": "12",
+    "OllamaChat.RandomChatterBotCommentChance": "18",
     "OllamaChat.RandomChatterMaxBotsPerPlayer": "4",
     "OllamaChat.Chatter.UseGeneralChannel": "1",
     "OllamaChat.Chatter.UseTradeChannel": "1",
@@ -166,7 +167,7 @@ OLLAMA = {
     "OllamaChat.PlayerReplyChance.Channel": "70",
     "OllamaChat.BotConversation.MaxChainDepth": "6",     # an argument may run six bot-to-bot hops before a person has to feed it
     "OllamaChat.BotConversation.ChanceDecayPct": "75",
-    "OllamaChat.BotConversation.ChainLinesPerMinute": "8",   # hard cap on bot-to-bot lines per channel per minute; replies to a person are not counted
+    "OllamaChat.BotConversation.ChainLinesPerMinute": "12",  # hard cap on bot-to-bot lines per channel per minute; replies to a person are not counted
     "OllamaChat.RepeatPenalty": "1.15",                  # discourage parroting the transcript's words and openers
     "OllamaChat.PresencePenalty": "0.3",
     "OllamaChat.BotConversation.RequireRecentHuman": "0",

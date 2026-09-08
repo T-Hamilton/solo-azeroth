@@ -36,7 +36,12 @@ $defs = @(
     @("Chat", "chat", "OllamaChat.Model",                      "Model",                                         "model",          "any model Ollama has pulled (ollama pull <name> in a terminal to get more)"),
     @("Chat", "chat", "OllamaChat.EnableRPPersonalities",      "Personalities on",                              "bool",           "off = every bot uses the same default voice"),
     @("Chat", "chat", "OllamaChat.EnableRandomChatter",        "Ambient chatter (bots start conversations)",    "bool",           ""),
-    @("Chat", "chat", "OllamaChat.RandomChatterBotCommentChance", "Ambient chatter chance per bot, %",          "int:0:100",      "the main volume dial. 20 = busy, 5 = quiet"),
+    @("Chat", "chat", "OllamaChat.RandomChatterBotCommentChance", "Ambient chatter chance per bot, %",          "int:0:100",      "the main volume dial for bots starting lines on their own. 20 = busy, 5 = quiet"),
+    @("Chat", "chat", "OllamaChat.Ambient.HoldPassPct",        "Ambient lines allowed into a live conversation, %", "int:0:100",  "while people are talking in a channel, this share of ambient lines still gets in (and joins the talk). 100 = no hold"),
+    @("Chat", "chat", "OllamaChat.BotConversation.ChainLinesPerMinute", "Bot-to-bot lines per channel per minute", "int:0:60", "hard cap on bots answering bots. 8 = a steady argument, 20 = a brawl. Replies to you never count"),
+    @("Chat", "chat", "OllamaChat.BotConversation.MaxChainDepth", "Bot-to-bot hops before a thread stops",      "int:0:20",       "how long two bots can go back and forth without you"),
+    @("Chat", "chat", "OllamaChat.Transcript.Lines",           "Lines of recent chat shown to a bot",           "int:0:40",       "context for replies. 10 = follows the thread; 20+ = starts imitating the crowd"),
+    @("Chat", "chat", "OllamaChat.NumPredict",                 "Max tokens per line",                           "int:10:400",     "110 = two or three sentences, 60 = one-liners"),
     @("Chat", "chat", "OllamaChat.MinRandomInterval",          "Ambient: min seconds between a bot's tries",    "int:5:3600",     ""),
     @("Chat", "chat", "OllamaChat.MaxRandomInterval",          "Ambient: max seconds between a bot's tries",    "int:5:3600",     ""),
     @("Chat", "chat", "OllamaChat.Chatter.UseGeneralChannel",  "Ambient in General",                            "bool",           ""),
@@ -54,6 +59,11 @@ $defs = @(
     # ---------------------------------------------------------------- Advanced
     @("Advanced", "chat", "OllamaChat.BotConversation.MaxChainDepth", "Bot-to-bot hops before a thread is cut", "int:0:20",       ""),
     @("Advanced", "chat", "OllamaChat.BotConversation.ChanceDecayPct", "Reply chance kept per hop, %",          "int:0:100",      "higher = longer threads"),
+    @("Advanced", "chat", "OllamaChat.BotConversation.EngagedWindowSeconds", "Seconds two speakers stay 'in conversation'", "int:0:900", "while engaged, the partner answers first and skips pacing cooldowns"),
+    @("Advanced", "chat", "OllamaChat.Ambient.HoldSeconds",    "A channel counts as 'live' this long after a line", "int:0:600",  "ambient hold applies while the last line is younger than this"),
+    @("Advanced", "chat", "OllamaChat.Repetition.OpenerHistorySize", "Opener check: recent lines compared",    "int:0:30",       "drops a reply that starts like one of the last N lines in the channel. 0 = off (the whole channel will start copying one opener)"),
+    @("Advanced", "chat", "OllamaChat.Repetition.CheckDirectAddress", "Repetition check also on replies to a partner", "bool",  ""),
+    @("Advanced", "chat", "OllamaChat.RepeatPenalty",          "Repeat penalty",                                "float:1:1.5",    "1.15 = stop parroting the transcript's words; 1.0 = off"),
     @("Advanced", "chat", "OllamaChat.BotConversation.RequireRecentHuman", "Bots only answer bots after you spoke", "bool",       "off = the chat lives without you"),
     @("Advanced", "chat", "OllamaChat.BotConversation.HumanWindowSeconds", "...for this many seconds",           "int:10:3600",    ""),
     @("Advanced", "chat", "OllamaChat.Cooldown.PerBotSeconds", "Min seconds between two lines from one bot",    "int:0:600",      ""),
@@ -63,7 +73,6 @@ $defs = @(
     @("Advanced", "chat", "OllamaChat.RandomChatterRealPlayerDistance", "Ambient: max distance to you, yards",  "int:1:1000000", "100000 = anyone on your continent (the channel still has to contain you)"),
     @("Advanced", "chat", "OllamaChat.EventChatterRealPlayerDistance", "Events: max distance to you, yards",    "int:1:100000",   ""),
     @("Advanced", "chat", "OllamaChat.SayDistance",            "/say reply distance, yards",                    "float:1:200",    ""),
-    @("Advanced", "chat", "OllamaChat.NumPredict",             "Max tokens per line",                           "int:10:400",     "60 = a sentence or two, 120 = room for a rant"),
     @("Advanced", "chat", "OllamaChat.Temperature",            "Temperature",                                   "float:0:2",      "0.9 = lively, 0.5 = predictable"),
     @("Advanced", "chat", "OllamaChat.MaxConcurrentQueries",   "Parallel requests to Ollama",                   "int:0:16",       "match OLLAMA_NUM_PARALLEL (4)"),
     @("Advanced", "chat", "OllamaChat.DisableRepliesInCombat", "Bots stay quiet while fighting",                "bool",           ""),
@@ -203,7 +212,8 @@ function Save-Overrides($v) {
         $ov[$pair[0]] = $h
     }
     if ($obj.PSObject.Properties["ConfOverrides"]) { $obj.ConfOverrides = $ov } else { $obj | Add-Member -NotePropertyName ConfOverrides -NotePropertyValue $ov }
-    $obj | ConvertTo-Json -Depth 6 | Set-Content $path -Encoding UTF8
+    # no byte-order mark: Python's json module chokes on one
+    [System.IO.File]::WriteAllText($path, ($obj | ConvertTo-Json -Depth 6), (New-Object System.Text.UTF8Encoding($false)))
 }
 function Save-All { $v = Collect; Write-Conf $botsConf $v.bots; Write-Conf $chatConf $v.chat; Save-Overrides $v }
 
