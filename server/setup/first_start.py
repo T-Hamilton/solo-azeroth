@@ -6,9 +6,9 @@ import json, os, subprocess, sys, threading, time
 
 SERVER = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RUNTIME = os.path.join(SERVER, "runtime")
-S = json.load(open(os.path.join(SERVER, "settings.json"), encoding="utf-8"))
+S = json.load(open(os.path.join(SERVER, "settings.json"), encoding="utf-8-sig"))
 if os.path.exists(os.path.join(SERVER, "settings.local.json")):
-    S.update(json.load(open(os.path.join(SERVER, "settings.local.json"), encoding="utf-8")))
+    S.update(json.load(open(os.path.join(SERVER, "settings.local.json"), encoding="utf-8-sig")))
 acct, pw = S["Account"], S["Password"]
 log_path = os.path.join(SERVER, "setup", "first_start.log")
 log = open(log_path, "w", encoding="utf-8", errors="replace")

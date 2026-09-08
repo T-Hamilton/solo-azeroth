@@ -23,7 +23,7 @@ OUT = os.path.join(SERVER, "personalities", "2026_09_06_00_personality_pack_genc
 
 
 def settings():
-    s = json.load(open(os.path.join(SERVER, "settings.json"), encoding="utf-8"))
+    s = json.load(open(os.path.join(SERVER, "settings.json"), encoding="utf-8-sig"))
     local = os.path.join(SERVER, "settings.local.json")
     if os.path.exists(local):
         s.update(json.load(open(local, encoding="utf-8")))

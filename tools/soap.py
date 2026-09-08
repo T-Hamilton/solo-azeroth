@@ -7,9 +7,9 @@ Port and the GM account come from server/settings.json (+ settings.local.json); 
 import base64, html, json, os, re, sys, urllib.error, urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-S = json.load(open(os.path.join(ROOT, "server", "settings.json"), encoding="utf-8"))
+S = json.load(open(os.path.join(ROOT, "server", "settings.json"), encoding="utf-8-sig"))
 if os.path.exists(os.path.join(ROOT, "server", "settings.local.json")):
-    S.update(json.load(open(os.path.join(ROOT, "server", "settings.local.json"), encoding="utf-8")))
+    S.update(json.load(open(os.path.join(ROOT, "server", "settings.local.json"), encoding="utf-8-sig")))
 
 
 def soap(command):
