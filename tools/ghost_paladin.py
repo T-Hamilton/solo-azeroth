@@ -193,6 +193,86 @@ def make_mapper(palette):
     return rgb
 
 
+def recolor_blp_inplace(data, rgb):
+    """Recolour a BLP without re-encoding it: the palette of a palettised texture, or the two colour endpoints of
+    every DXT block. Alpha, mip chain and compression bytes are untouched, so the shape of every effect stays
+    byte-identical. Returns the new bytes, or None for a layout this does not handle."""
+    buf = bytearray(data)
+    magic = bytes(buf[:4])
+
+    def map565(v):
+        r = ((v >> 11) & 31) * 255 // 31
+        g = ((v >> 5) & 63) * 255 // 63
+        b = (v & 31) * 255 // 31
+        nr, ng, nb = rgb(r, g, b)
+        return ((nr * 31 + 127) // 255 << 11) | ((ng * 63 + 127) // 255 << 5) | ((nb * 31 + 127) // 255)
+
+    def remap_palette(ofs):
+        for i in range(256):
+            b, g, r, a = buf[ofs + i * 4:ofs + i * 4 + 4]
+            nr, ng, nb = rgb(r, g, b)
+            buf[ofs + i * 4:ofs + i * 4 + 4] = bytes((nb, ng, nr, a))
+
+    def remap_dxt(ofs, size, block_size):
+        color_ofs = block_size - 8   # DXT3/5 carry an 8-byte alpha block first
+        for pos in range(ofs, ofs + size - block_size + 1, block_size):
+            c = pos + color_ofs
+            c0, c1 = struct.unpack_from("<HH", buf, c)
+            n0, n1 = map565(c0), map565(c1)
+            if block_size == 8:
+                # DXT1 encodes its mode in the endpoint order: c0 > c1 = four colours, c0 <= c1 = three + transparent.
+                # Keep the mode: swap the endpoints back and flip the index bits (0<->1, 2<->3) if the order changed.
+                four = c0 > c1
+                if four and n0 <= n1:
+                    if n0 < n1:
+                        # swapping the endpoints swaps the two interpolants as well, so flipping every index's low
+                        # bit (0<->1, 2<->3) reproduces the block exactly
+                        n0, n1 = n1, n0
+                        idx = struct.unpack_from("<I", buf, c + 4)[0] ^ 0x55555555
+                        struct.pack_into("<I", buf, c + 4, idx)
+                    else:
+                        # equal after mapping: nudge one unit apart to stay in four-colour mode
+                        if n1 > 0:
+                            n1 -= 1
+                        else:
+                            n0 += 1
+                elif not four and n0 > n1:
+                    # three-colour + transparent mode: index 3 is "transparent", so the indices cannot be flipped;
+                    # pull the endpoints together instead (a one-block loss of shading, transparency kept)
+                    n0 = n1
+            struct.pack_into("<HH", buf, c, n0, n1)
+
+    if magic == b"BLP2":
+        compression, alpha_depth, alpha_type, has_mips = buf[8], buf[9], buf[10], buf[11]
+        offsets = struct.unpack_from("<16I", buf, 20)
+        sizes = struct.unpack_from("<16I", buf, 84)
+        if compression == 1:
+            remap_palette(148)
+        elif compression == 2:
+            block = 8 if alpha_depth <= 1 else 16
+            for o, s in zip(offsets, sizes):
+                if o and s:
+                    remap_dxt(o, s, block)
+        elif compression == 3:
+            for o, s in zip(offsets, sizes):
+                for p in range(o, o + s - 3, 4):
+                    b, g, r, a = buf[p:p + 4]
+                    nr, ng, nb = rgb(r, g, b)
+                    buf[p:p + 4] = bytes((nb, ng, nr, a))
+        else:
+            return None
+        return bytes(buf)
+
+    if magic == b"BLP1":
+        compression = struct.unpack_from("<I", buf, 4)[0]
+        if compression != 1:
+            return None   # JPEG-encoded BLP1: leave it
+        remap_palette(28 + 64 + 64)
+        return bytes(buf)
+
+    return None
+
+
 def recolor_image(im, rgb):
     im = im.convert("RGBA")
     px = im.load()
@@ -327,14 +407,13 @@ def build(dbc_dir, data_dir, palette):
         data = client.read(name)
         new = None
         if data:
-            try:
-                im = Image.open(io.BytesIO(data))
-                im.load()
+            recoloured = recolor_blp_inplace(data, rgb)
+            if recoloured:
                 new = ghost_texture_name(name)
-                write_blp2(recolor_image(im, rgb), out_path(new))
-            except Exception as e:
-                print("  texture skipped (%s): %s" % (e, name))
-                new = None
+                os.makedirs(os.path.dirname(out_path(new)), exist_ok=True)
+                open(out_path(new), "wb").write(recoloured)
+            else:
+                print("  texture left as is (unhandled BLP layout):", name)
         done_tex[key] = new
         return new
 
