@@ -105,7 +105,7 @@ std::string SoloGrantDungeonQuests(Player* p, SoloDungeon const& d)
         p->AddQuestAndCheckCompletion(quest, nullptr);
         ++added;
     }
-    std::string s = "GM Toolkit: " + d.name + ": " + std::to_string(added) + " quest" + (added == 1 ? "" : "s") + " added";
+    std::string s = d.name + ": " + std::to_string(added) + " quest" + (added == 1 ? "" : "s") + " added";
     if (have)      s += ", " + std::to_string(have) + " already in log or done";
     if (wrongFor)  s += ", " + std::to_string(wrongFor) + " for another race/class";
     if (itemStart) s += ", " + std::to_string(itemStart) + " start from an item (loot it)";

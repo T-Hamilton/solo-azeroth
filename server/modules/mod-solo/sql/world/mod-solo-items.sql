@@ -16,6 +16,19 @@ UPDATE item_template SET
     ScriptName = 'item_solo_gm_toolkit'
 WHERE entry = 3878;
 
+-- Adventurer's Codex: entry 1099 "Deprecated Codex of Sustenance II" (a book icon, displayid 241). The player-facing
+-- cousin of the toolkit: portable class trainer + dungeon-quest granting (src/SoloAdventurersCodex.cpp). class/subclass
+-- are forced to 15/0 (a plain misc item) so the client never treats it as a book to "learn"; displayid is left alone.
+UPDATE item_template SET
+    class = 15, subclass = 0,
+    name = 'Adventurer''s Codex', description = 'Train your class and grab a dungeon''s quests. Right-click.',
+    Quality = 4, ItemLevel = 1, RequiredLevel = 0, RequiredSkill = 0, RequiredSpell = 0, AllowableClass = -1, AllowableRace = -1,
+    BuyCount = 1, BuyPrice = 0, SellPrice = 0, stackable = 1, maxcount = 1, bonding = 1, Flags = 64,
+    spellid_1 = 18282, spelltrigger_1 = 0, spellcharges_1 = 0, spellcooldown_1 = 1000, spellcategory_1 = 0, spellcategorycooldown_1 = -1,
+    spellid_2 = 0, spellid_3 = 0, spellid_4 = 0, spellid_5 = 0,
+    ScriptName = 'item_solo_adventurers_codex'
+WHERE entry = 1099;
+
 -- Potion of Experience: entry 2461 "Deprecated Elemental Resistance Potion" (class 0 consumable, subclass 1 potion).
 UPDATE item_template SET
     name = 'Potion of Experience',
