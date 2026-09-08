@@ -167,7 +167,15 @@ PALETTES = {
 }
 
 
-def make_mapper(palette):
+# Additive layers add light to whatever is under them; blue adds far less visible light to green ground than yellow
+# did, so a few ground decals need a brightness push to stay legible. Texture name (lower case) -> luminance gain.
+TEXTURE_GAIN = {
+    "spells\\lavagroundholy.blp": 1.7,        # Consecration's cracks
+    "spells\\t_vfx_fire01_a32_blank4.blp": 1.3,
+}
+
+
+def make_mapper(palette, gain=1.0):
     lo, mid, hi = PALETTES[palette]
 
     def grad(l):
@@ -185,7 +193,7 @@ def make_mapper(palette):
         w = min(1.0, max(0.0, (sat - 0.06) / 0.25))
         if w <= 0.0:
             return (r, g, b)
-        lum = (0.30 * r + 0.59 * g + 0.11 * b) / 255.0
+        lum = min(1.0, gain * (0.30 * r + 0.59 * g + 0.11 * b) / 255.0)
         tr, tg, tb = grad(lum)
         return tuple(int(round(min(255.0, max(0.0, o * (1.0 - w) + t * w))))
                      for o, t in ((r, tr), (g, tg), (b, tb)))
@@ -407,7 +415,8 @@ def build(dbc_dir, data_dir, palette):
         data = client.read(name)
         new = None
         if data:
-            recoloured = recolor_blp_inplace(data, rgb)
+            gain = TEXTURE_GAIN.get(key.replace("/", "\\"), 1.0)
+            recoloured = recolor_blp_inplace(data, rgb if gain == 1.0 else make_mapper(palette, gain))
             if recoloured:
                 new = ghost_texture_name(name)
                 os.makedirs(os.path.dirname(out_path(new)), exist_ok=True)
@@ -504,6 +513,15 @@ def build(dbc_dir, data_dir, palette):
             if r[i] in new_sv:
                 r[i] = new_sv[r[i]]
                 retargeted += 1
+
+    # Vanilla look-backs. WotLK gave Divine Protection (498) a small flash instead of the bubble it shared with
+    # Divine Shield (642) in vanilla; give the cloned Divine Protection visual Divine Shield's state kit (the bubble).
+    SV_STATE = 4
+    for target, source in ((498, 642),):
+        t, s = spell.by_id.get(target), spell.by_id.get(source)
+        if t and s and t[SPELL_VISUAL[0]] in sv.by_id and s[SPELL_VISUAL[0]] in sv.by_id:
+            sv.by_id[t[SPELL_VISUAL[0]]][SV_STATE] = sv.by_id[s[SPELL_VISUAL[0]]][SV_STATE]
+            print("visual override: spell %d takes the state kit (bubble) of spell %d" % (target, source))
 
     for d, name in ((spell, "Spell.dbc"), (sv, "SpellVisual.dbc"), (kit, "SpellVisualKit.dbc"), (efn, "SpellVisualEffectName.dbc")):
         d.write(os.path.join(OUT, "DBFilesClient", name))
