@@ -152,6 +152,7 @@ OLLAMA = {
     "OllamaChat.RandomChatterRealPlayerDistance": "100000",
     "OllamaChat.RandomChatterBotCommentChance": "18",
     "OllamaChat.RandomChatterMaxBotsPerPlayer": "4",
+    "OllamaChat.Chatter.ZoneChannelsAcrossMap": "1",   # any bot on your continent may talk in YOUR zone's General/Trade (else only same-zone bots)
     "OllamaChat.Chatter.UseGeneralChannel": "1",
     "OllamaChat.Chatter.UseTradeChannel": "1",
     "OllamaChat.Chatter.UseLookingForGroupChannel": "1",   # realm-wide: the 'world chat' feed

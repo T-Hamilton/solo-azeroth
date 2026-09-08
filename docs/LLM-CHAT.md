@@ -117,7 +117,9 @@ Out of the box the module makes quips, not conversation. What the code did, and 
 
 | First session with the layer: four engaged bots, two answers per bot line, and engaged replies exempt from every cap. | Forty lines a minute, all opening "Seriously, Name?" because each bot copied the transcript. | A bot's line gets exactly one answer; bot-to-bot lines are capped per channel per minute (`ChainLinesPerMinute`, 8); the opener filter applies to engaged replies too; a repeat/presence penalty on generation; the prompt names the exact line to answer and forbids copying openers; transcript trimmed to 10 lines; "Name:" labels the model writes are stripped whoever's name it is. |
 
-Knobs: `Transcript.Lines`, `Transcript.WindowSeconds`, `BotConversation.EngagedWindowSeconds`,
+| Only bots in your zone could speak or reply in General. | 1000 bots over four continents is a handful per zone, and the funnel showed it: `due=85 ... destination=0 submitted=0`, forty "nowhere to speak" per tick. Quiet the moment you left Mulgore. | `Chatter.ZoneChannelsAcrossMap`: any bot on your continent may speak and reply in the zone channel you are reading (it is joined to it at delivery). Off restores the same-zone rule. |
+
+Knobs: `Chatter.ZoneChannelsAcrossMap`, `Transcript.Lines`, `Transcript.WindowSeconds`, `BotConversation.EngagedWindowSeconds`,
 `BotConversation.ChainLinesPerMinute`, `Ambient.HoldSeconds`, `Ambient.HoldPassPct`, `Repetition.CheckDirectAddress`
 (all under `OllamaChat.` in `setup\gen_configs.py`), and the ADDRESSED and AMBIENT_JOIN sections of
 `personalities\prompts.txt`.

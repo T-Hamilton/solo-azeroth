@@ -44,6 +44,7 @@ $defs = @(
     @("Chat", "chat", "OllamaChat.NumPredict",                 "Max tokens per line",                           "int:10:400",     "110 = two or three sentences, 60 = one-liners"),
     @("Chat", "chat", "OllamaChat.MinRandomInterval",          "Ambient: min seconds between a bot's tries",    "int:5:3600",     ""),
     @("Chat", "chat", "OllamaChat.MaxRandomInterval",          "Ambient: max seconds between a bot's tries",    "int:5:3600",     ""),
+    @("Chat", "chat", "OllamaChat.Chatter.ZoneChannelsAcrossMap", "Whole continent talks in your zone channel", "bool",         "on: any bot on your continent may speak and reply in YOUR General/Trade. off: only bots in your zone (1000 bots over four continents = a few per zone)"),
     @("Chat", "chat", "OllamaChat.Chatter.UseGeneralChannel",  "Ambient in General",                            "bool",           ""),
     @("Chat", "chat", "OllamaChat.Chatter.UseTradeChannel",    "Ambient in Trade (cities)",                     "bool",           ""),
     @("Chat", "chat", "OllamaChat.Chatter.UseLookingForGroupChannel", "Ambient in LookingForGroup (realm-wide)", "bool",          "you must /join LookingForGroup to see it"),

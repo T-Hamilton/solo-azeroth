@@ -1,8 +1,8 @@
 diff --git a/src/mod-ollama-chat_config.cpp b/src/mod-ollama-chat_config.cpp
-index ebde5db..bbef2f3 100644
+index ebde5db..9de560d 100644
 --- a/src/mod-ollama-chat_config.cpp
 +++ b/src/mod-ollama-chat_config.cpp
-@@ -124,6 +124,16 @@ float    g_RepetitionSimilarityThreshold = 0.72f;
+@@ -124,6 +124,17 @@ float    g_RepetitionSimilarityThreshold = 0.72f;
  uint32_t g_RepetitionWindowSeconds       = 1800;
  uint32_t g_OpenerHistorySize             = 8;
  
@@ -13,13 +13,14 @@ index ebde5db..bbef2f3 100644
 +uint32_t    g_AmbientHoldPassPct      = 25;
 +uint32_t    g_ChainLinesPerMinute     = 8;
 +bool        g_RepetitionCheckDirectAddress = true;
++bool        g_ZoneChannelsAcrossMap        = true;
 +std::string g_AddressedTemplate       = "{player_name} is talking to you, {bot_name}. Answer them.";
 +std::string g_AmbientJoinLine         = "There is a conversation going on above. Jump into it: react to what someone just said, take a side, back someone up or needle them. Do not start a new topic and do not repeat what was said.";
 +
  // --------------------------------------------
  // Topic engine
  // --------------------------------------------
-@@ -718,6 +728,17 @@ void LoadOllamaChatConfig()
+@@ -718,6 +729,18 @@ void LoadOllamaChatConfig()
      g_RepetitionWindowSeconds         = sConfigMgr->GetOption<uint32_t>("OllamaChat.Repetition.WindowSeconds", 1800);
      g_OpenerHistorySize               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Repetition.OpenerHistorySize", 8);
  
@@ -31,6 +32,7 @@ index ebde5db..bbef2f3 100644
 +    g_AmbientHoldPassPct              = sConfigMgr->GetOption<uint32_t>("OllamaChat.Ambient.HoldPassPct", 25);
 +    g_ChainLinesPerMinute             = sConfigMgr->GetOption<uint32_t>("OllamaChat.BotConversation.ChainLinesPerMinute", 8);
 +    g_RepetitionCheckDirectAddress    = sConfigMgr->GetOption<bool>("OllamaChat.Repetition.CheckDirectAddress", true);
++    g_ZoneChannelsAcrossMap           = sConfigMgr->GetOption<bool>("OllamaChat.Chatter.ZoneChannelsAcrossMap", true);
 +    g_AddressedTemplate               = sConfigMgr->GetOption<std::string>("OllamaChat.AddressedTemplate", g_AddressedTemplate);
 +    g_AmbientJoinLine                 = sConfigMgr->GetOption<std::string>("OllamaChat.Ambient.JoinLine", g_AmbientJoinLine);
 +
@@ -38,10 +40,10 @@ index ebde5db..bbef2f3 100644
      g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);
      g_TopicWeightWorld                = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightWorld", 30);
 diff --git a/src/mod-ollama-chat_config.h b/src/mod-ollama-chat_config.h
-index 1bf4a26..6331a97 100644
+index 1bf4a26..761f673 100644
 --- a/src/mod-ollama-chat_config.h
 +++ b/src/mod-ollama-chat_config.h
-@@ -202,6 +202,19 @@ extern float    g_RepetitionSimilarityThreshold;
+@@ -202,6 +202,20 @@ extern float    g_RepetitionSimilarityThreshold;
  extern uint32_t g_RepetitionWindowSeconds;
  extern uint32_t g_OpenerHistorySize;
  
@@ -55,6 +57,7 @@ index 1bf4a26..6331a97 100644
 +extern uint32_t    g_AmbientHoldPassPct;        // chance an ambient line is still allowed into a live scope
 +extern uint32_t    g_ChainLinesPerMinute;       // hard cap on bot-to-bot replies per scope per minute (0 = none)
 +extern bool        g_RepetitionCheckDirectAddress; // run the repetition/opener filter on engaged replies too
++extern bool        g_ZoneChannelsAcrossMap;        // General/Trade: any bot on the real player's continent may speak in that player's zone channel
 +extern std::string g_AddressedTemplate;         // {addressed} in the reply template when the line is aimed at this bot
 +extern std::string g_AmbientJoinLine;           // replaces the random topic line when the scope is live
 +
@@ -62,10 +65,18 @@ index 1bf4a26..6331a97 100644
  // Topic engine
  // --------------------------------------------
 diff --git a/src/mod-ollama-chat_dispatch.cpp b/src/mod-ollama-chat_dispatch.cpp
-index f1364df..6072df4 100644
+index f1364df..f180d78 100644
 --- a/src/mod-ollama-chat_dispatch.cpp
 +++ b/src/mod-ollama-chat_dispatch.cpp
-@@ -263,7 +263,13 @@ namespace
+@@ -11,6 +11,7 @@
+ #include "mod-ollama-chat_world.h"
+ 
+ #include "CellImpl.h"
++#include "DBCStores.h"
+ #include "Channel.h"
+ #include "ChannelMgr.h"
+ #include "GridNotifiers.h"
+@@ -263,7 +264,13 @@ namespace
              case SRC_GENERAL_LOCAL:
              {
                  Channel* channel = ResolveChannel(bot, c.request.channelName);
@@ -80,7 +91,7 @@ index f1364df..6072df4 100644
                      return false;
  
                  // Checked before generating too; re-checked because the only
-@@ -348,7 +354,8 @@ namespace
+@@ -348,7 +355,8 @@ namespace
          // the same answer is correct -- suppressing it leaves the asker
          // staring at silence, which reads as the bot being broken rather than
          // as anti-repetition working.
@@ -90,7 +101,7 @@ index f1364df..6072df4 100644
          {
              ++g_droppedGovernor;
              if (g_DebugEnabled)
-@@ -381,6 +388,18 @@ namespace
+@@ -381,6 +389,18 @@ namespace
          Governor_RecordUtterance(botGuid, c.request.scopeKey, c.text);
          ++g_totalDelivered;
  
@@ -109,11 +120,46 @@ index f1364df..6072df4 100644
          // This bot is now in a conversation with whoever it just answered, so
          // their next line in this scope is a turn in it rather than ambient
          // chatter. Only against a real person: an open conversation bypasses
+@@ -700,6 +720,11 @@ OllamaDispatchStats OllamaDispatch_GetStats()
+ }
+ 
+ Channel* OllamaResolveZoneChannel(Player* bot, uint32_t chatChannelId)
++{
++    return OllamaResolveZoneChannelFor(bot, chatChannelId, bot ? bot->GetZoneId() : 0);
++}
++
++Channel* OllamaResolveZoneChannelFor(Player* bot, uint32_t chatChannelId, uint32_t zoneId)
+ {
+     if (!bot)
+         return nullptr;
+@@ -708,11 +733,9 @@ Channel* OllamaResolveZoneChannel(Player* bot, uint32_t chatChannelId)
+     if (!mgr)
+         return nullptr;
+ 
+-    PlayerbotAI* botAI = PlayerbotsMgr::instance().GetPlayerbotAI(bot);
+     std::string zoneName;
+-    if (botAI)
+-        if (AreaTableEntry const* zone = botAI->GetCurrentZone())
+-            zoneName = PlayerbotAI::GetLocalizedAreaName(zone);
++    if (AreaTableEntry const* zone = sAreaTableStore.LookupEntry(zoneId))
++        zoneName = PlayerbotAI::GetLocalizedAreaName(zone);
+ 
+     for (auto const& [key, channel] : mgr->GetChannels())
+     {
 diff --git a/src/mod-ollama-chat_dispatch.h b/src/mod-ollama-chat_dispatch.h
-index af5d2f3..a2cbdfa 100644
+index af5d2f3..a0c4ccc 100644
 --- a/src/mod-ollama-chat_dispatch.h
 +++ b/src/mod-ollama-chat_dispatch.h
-@@ -63,6 +63,10 @@ struct OllamaChatRequest
+@@ -39,6 +39,8 @@ class Channel;
+ //
+ // World thread only.
+ Channel* OllamaResolveZoneChannel(Player* bot, uint32_t chatChannelId);
++// The same, for an arbitrary zone (solo-azeroth): the channel a real player in `zoneId` is reading, on `bot`'s team.
++Channel* OllamaResolveZoneChannelFor(Player* bot, uint32_t chatChannelId, uint32_t zoneId);
+ 
+ struct OllamaChatRequest
+ {
+@@ -63,6 +65,10 @@ struct OllamaChatRequest
      // Direct address skips the pacing cooldowns and repetition suppression.
      bool directAddress = false;
  
@@ -346,7 +392,7 @@ index 5f5611d..2465415 100644
  
  void Governor_OnPlayerLogout(ObjectGuid guid);
 diff --git a/src/mod-ollama-chat_handler.cpp b/src/mod-ollama-chat_handler.cpp
-index 264d845..4064e4a 100644
+index 264d845..b5f3449 100644
 --- a/src/mod-ollama-chat_handler.cpp
 +++ b/src/mod-ollama-chat_handler.cpp
 @@ -126,8 +126,14 @@ static bool OllamaIsDirectAddress(Player* bot, Player* speaker, ChatChannelSourc
@@ -390,7 +436,22 @@ index 264d845..4064e4a 100644
      }
      else
      {
-@@ -1357,7 +1376,9 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
+@@ -1350,14 +1369,22 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
+             const bool isGlobalChannel = (chanId == uint32(ChatChannelId::WORLD_DEFENSE) ||
+                                           chanId == uint32(ChatChannelId::LOOKING_FOR_GROUP));
+ 
+-            if (isZoneChannel && candidate->GetZoneId() != player->GetZoneId())
+-                continue;   // wrong zone for a zone-scoped channel
++            // solo-azeroth: with ZoneChannelsAcrossMap the whole continent may answer in the speaker's zone
++            // channel (the bot is joined to it at delivery); otherwise the stock same-zone rule.
++            if (isZoneChannel)
++            {
++                if (g_ZoneChannelsAcrossMap ? candidate->GetMapId() != player->GetMapId()
++                                            : candidate->GetZoneId() != player->GetZoneId())
++                    continue;   // wrong zone / continent for a zone-scoped channel
++            }
+ 
+             // A custom (unnumbered) channel has id 0 and no zone semantics;
              // membership alone decides, which is checked below.
              
              // CHANNEL MEMBERSHIP CHECK: Bot must actually be in the channel
@@ -401,7 +462,7 @@ index 264d845..4064e4a 100644
              {
                  if(g_DebugEnabled)
                  {
-@@ -1555,7 +1576,8 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
+@@ -1555,7 +1582,8 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
          return;
      
      std::vector<Player*> finalCandidates;
@@ -411,7 +472,7 @@ index 264d845..4064e4a 100644
      // For whispers, handle directly - there should only be one receiver bot
      if (sourceLocal == SRC_WHISPER_LOCAL)
      {
-@@ -1565,6 +1587,7 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
+@@ -1565,6 +1593,7 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
              if (!(g_DisableRepliesInCombat && whisperBot->IsInCombat()))
              {
                  finalCandidates.push_back(whisperBot);
@@ -419,7 +480,7 @@ index 264d845..4064e4a 100644
                  if(g_DebugEnabled)
                  {
                      LOG_INFO("module.ollamachat", "[Ollama Chat] Whisper: Bot {} selected to respond", whisperBot->GetName());
-@@ -1622,6 +1645,7 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
+@@ -1622,6 +1651,7 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
              if (!(g_DisableRepliesInCombat && chosen->IsInCombat()))
              {
                  finalCandidates.push_back(chosen);
@@ -427,7 +488,7 @@ index 264d845..4064e4a 100644
                  if(g_DebugEnabled)
                  {
                      LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} selected (mentioned first at position {})", 
-@@ -1662,6 +1686,8 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
+@@ -1662,6 +1692,8 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
                  if (roll < botChance)
                  {
                      finalCandidates.push_back(bot);
@@ -436,7 +497,7 @@ index 264d845..4064e4a 100644
                      if(g_DebugEnabled)
                      {
                          LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} PASSED chance roll ({} < {}%{})", bot->GetName(), roll, botChance, botIsAddressed ? ", addressed" : "");
-@@ -1692,17 +1718,52 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
+@@ -1692,17 +1724,52 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
          return;
      }
      
@@ -474,17 +535,17 @@ index 264d845..4064e4a 100644
 +            room = picked.empty() ? 1 : 0;
 +        }
 +        else if (!addressedBots.empty())
-+        {
+         {
+-            LOG_INFO("module.ollamachat", "[Ollama Chat] Limiting {} bots to {} (MaxBotsToPick)", finalCandidates.size(), countToPick);
 +            // A crowd does not pile onto someone else's exchange: at most one
 +            // bystander, and only sometimes.
 +            room = (room > 0 && urand(0, 99) < 35) ? 1 : 0;
-+        }
-+        else if (room > 1)
-         {
--            LOG_INFO("module.ollamachat", "[Ollama Chat] Limiting {} bots to {} (MaxBotsToPick)", finalCandidates.size(), countToPick);
-+            room = urand(1, room);
          }
 -        finalCandidates.resize(countToPick);
++        else if (room > 1)
++        {
++            room = urand(1, room);
++        }
 +        for (uint32_t i = 0; i < room && i < others.size(); ++i)
 +            picked.push_back(others[i]);
 +
@@ -495,7 +556,7 @@ index 264d845..4064e4a 100644
      }
      
      if(g_DebugEnabled && !finalCandidates.empty())
-@@ -1741,7 +1802,18 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
+@@ -1741,7 +1808,18 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
              continue;
          }
  
@@ -515,7 +576,7 @@ index 264d845..4064e4a 100644
          if (prompt.empty())
              continue;
  
-@@ -1754,6 +1826,7 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
+@@ -1754,6 +1832,7 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
          request.chainDepth  = chainDepth;
          request.directAddress = directAddress;
          request.scopeKey    = scopeKey;
@@ -523,7 +584,7 @@ index 264d845..4064e4a 100644
          request.prompt      = std::move(prompt);
          request.botName     = bot->GetName();
          request.originMessage = msg;
-@@ -1900,8 +1973,9 @@ static bool IsBotEligibleForChatChannelLocal(Player* bot, Player* player, ChatCh
+@@ -1900,8 +1979,9 @@ static bool IsBotEligibleForChatChannelLocal(Player* bot, Player* player, ChatCh
      }
  }
  
@@ -535,7 +596,7 @@ index 264d845..4064e4a 100644
      if (!bot || !player) {
          return "";
      }
-@@ -1957,6 +2031,17 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
+@@ -1957,6 +2037,17 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
      std::string chatHistory         = GetBotHistoryPrompt(botGuid, playerGuid, playerMessage);
      std::string sentimentInfo       = GetSentimentPromptAddition(bot, player);
  
@@ -553,7 +614,7 @@ index 264d845..4064e4a 100644
      // Retrieve RAG information if enabled
      std::string ragInfo;
      if (g_EnableRAG && g_RAGSystem) {
-@@ -2009,7 +2094,17 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
+@@ -2009,7 +2100,17 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
          fmt::arg("player_message", playerMessage),
          fmt::arg("extra_info", extraInfo),
          fmt::arg("chat_history", chatHistory),
@@ -572,7 +633,7 @@ index 264d845..4064e4a 100644
      );
  
      // Add RAG information to the prompt if available
-@@ -2024,7 +2119,9 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
+@@ -2024,7 +2125,9 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
  
      // What this bot remembers, and how it feels about people. Bounded by
      // their own token budgets, so this cannot grow the prompt without limit.
@@ -598,10 +659,10 @@ index 75b1e48..3395264 100644
  
  // Bounded, distance-sorted snapshot helpers used by the prompt builders and
 diff --git a/src/mod-ollama-chat_random.cpp b/src/mod-ollama-chat_random.cpp
-index 710070b..aacece2 100644
+index 710070b..b4e5af7 100644
 --- a/src/mod-ollama-chat_random.cpp
 +++ b/src/mod-ollama-chat_random.cpp
-@@ -86,7 +86,10 @@ namespace
+@@ -86,7 +86,30 @@ namespace
          // the bot's zone is not the same as being in the channel -- players
          // leave General -- so each resolved channel is checked for a real
          // listener below before it becomes a candidate.
@@ -609,11 +670,31 @@ index 710070b..aacece2 100644
 +        // solo-azeroth: zone channels need a real player in the bot's zone; the realm-wide LFG feed only needs a
 +        // real player in that channel (checked in addChannel), wherever they are.
 +        const bool zoneAudience = !g_DisableForCustomChannels && world.RealPlayerInZoneAndFaction(bot);
++
++        // solo-azeroth: nobody in this bot's zone, but a real player somewhere on the continent -> speak in the
++        // zone channel THAT player is reading (the bot is joined to it at delivery). This is what turns "1000 bots
++        // spread over four continents" into a General channel with people in it.
++        Player* mapListener = (g_ZoneChannelsAcrossMap && !zoneAudience && !g_DisableForCustomChannels)
++                                  ? world.NearestRealPlayerOnMap(bot) : nullptr;
++        if (mapListener)
++        {
++            auto addRemote = [&](uint32_t chanId, bool enabled)
++            {
++                if (!enabled)
++                    return;
++                Channel* ch = OllamaResolveZoneChannelFor(bot, chanId, mapListener->GetZoneId());
++                if (ch && world.RealPlayerInChannel(ch))
++                    options.push_back({ SRC_GENERAL_LOCAL, ch->GetName(), ch->GetChannelId() });
++            };
++            addRemote(ChatChannelId::GENERAL, g_ChatterUseGeneralChannel);
++            addRemote(ChatChannelId::TRADE,   g_ChatterUseTradeChannel);
++        }
++
 +        if (!g_DisableForCustomChannels)
          {
              // Resolve real zone/city channels and carry their ACTUAL names
              // forward. Looking up "General" by name never matches (channels are
-@@ -113,10 +116,10 @@ namespace
+@@ -113,10 +136,10 @@ namespace
                  options.push_back({ SRC_GENERAL_LOCAL, ch->GetName(), ch->GetChannelId() });
              };
  
@@ -627,7 +708,7 @@ index 710070b..aacece2 100644
          }
  
          if (options.empty())
-@@ -129,7 +132,8 @@ namespace
+@@ -129,7 +152,8 @@ namespace
          return true;
      }
  
@@ -637,7 +718,7 @@ index 710070b..aacece2 100644
      {
          PlayerbotAI* botAI = PlayerbotsMgr::instance().GetPlayerbotAI(bot);
          if (!botAI || !botAI->GetChatHelper())
-@@ -155,7 +159,19 @@ namespace
+@@ -155,7 +179,19 @@ namespace
              fmt::arg("bot_map", OllamaContinentName(bot)),
              fmt::arg("bot_personality", personalityPrompt),
              fmt::arg("bot_personality_name", personality),
@@ -658,7 +739,7 @@ index 710070b..aacece2 100644
  
          // Statement or question. At roleplay strictness 2 the in-character
          // lists replace the shipped ones, which otherwise push bots toward
-@@ -185,7 +201,8 @@ namespace
+@@ -185,7 +221,8 @@ namespace
              prompt += " " + questions[PickIndex(questions.size())];
          }
  
@@ -668,7 +749,7 @@ index 710070b..aacece2 100644
          prompt += Roleplay_BuildVoicePrompt(bot);
          prompt += Expression_BuildGesturePrompt();
  
-@@ -278,7 +295,12 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+@@ -278,7 +315,12 @@ void OllamaBotRandomChatter::HandleRandomChatter()
      world.Build();
  
      if (world.Empty())
@@ -681,7 +762,7 @@ index 710070b..aacece2 100644
  
      auto const& allPlayers = ObjectAccessor::GetPlayers();
  
-@@ -294,6 +316,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+@@ -294,6 +336,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
          if (!ai || !ai->IsBotAI())
              continue;
  
@@ -689,7 +770,7 @@ index 710070b..aacece2 100644
          if (g_DisableRepliesInCombat && bot->IsInCombat())
              continue;
  
-@@ -307,6 +330,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+@@ -307,6 +350,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
  
          if (!guildAudience && !nearRealPlayer)
              continue;
@@ -697,7 +778,7 @@ index 710070b..aacece2 100644
  
          // Schedule.
          {
-@@ -320,6 +344,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+@@ -320,6 +364,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
              if (now < it->second)
                  continue;
          }
@@ -705,7 +786,7 @@ index 710070b..aacece2 100644
  
          auto reschedule = [&]()
          {
-@@ -332,6 +357,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+@@ -332,6 +377,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
              reschedule();
              continue;
          }
@@ -713,7 +794,7 @@ index 710070b..aacece2 100644
  
          // Pick what to talk about. Weighted toward the people and the world
          // around the bot rather than its own inventory.
-@@ -341,6 +367,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+@@ -341,6 +387,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
              reschedule();
              continue;
          }
@@ -721,7 +802,7 @@ index 710070b..aacece2 100644
  
          ChatChannelSourceLocal source = SRC_SAY_LOCAL;
          std::string channelName;
-@@ -354,6 +381,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+@@ -354,6 +401,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
              reschedule();
              continue;
          }
@@ -729,7 +810,7 @@ index 710070b..aacece2 100644
  
          // Same inputs the reply path uses, so ambient lines and replies in the
          // same channel share one cooldown, rate limit and repetition history.
-@@ -363,13 +391,24 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+@@ -363,13 +411,24 @@ void OllamaBotRandomChatter::HandleRandomChatter()
              source == SRC_GUILD_LOCAL ? bot->GetGuildId() : 0,
              bot->GetZoneId());
  
@@ -755,7 +836,7 @@ index 710070b..aacece2 100644
          if (prompt.empty())
          {
              reschedule();
-@@ -390,8 +429,16 @@ void OllamaBotRandomChatter::HandleRandomChatter()
+@@ -390,8 +449,16 @@ void OllamaBotRandomChatter::HandleRandomChatter()
          request.triggerBotReplies = true;
  
          if (OllamaDispatch_Submit(std::move(request)))
@@ -859,3 +940,53 @@ index 0e7368a..c8fdd90 100644
  
      if (g_ResponseStripDecorativeUnicode)
          s = StripDecorativeUnicode(s);
+diff --git a/src/mod-ollama-chat_world.cpp b/src/mod-ollama-chat_world.cpp
+index 5793c70..d668edc 100644
+--- a/src/mod-ollama-chat_world.cpp
++++ b/src/mod-ollama-chat_world.cpp
+@@ -140,3 +140,27 @@ bool OllamaWorldSnapshot::RealPlayerInZoneAndFaction(Player* who) const
+     }
+     return false;
+ }
++
++// solo-azeroth: nearest real player of this bot's faction on the same map, or nullptr.
++Player* OllamaWorldSnapshot::NearestRealPlayerOnMap(Player* who) const
++{
++    if (!who || !who->IsInWorld())
++        return nullptr;
++
++    Player* best = nullptr;
++    float bestDist = 0.0f;
++    for (Player* player : realPlayers)
++    {
++        if (player == who || !player->IsInWorld())
++            continue;
++        if (player->GetMapId() != who->GetMapId() || player->GetTeamId() != who->GetTeamId())
++            continue;
++        const float d = who->GetDistance(player);
++        if (!best || d < bestDist)
++        {
++            best = player;
++            bestDist = d;
++        }
++    }
++    return best;
++}
+diff --git a/src/mod-ollama-chat_world.h b/src/mod-ollama-chat_world.h
+index 52f9cde..2fd3104 100644
+--- a/src/mod-ollama-chat_world.h
++++ b/src/mod-ollama-chat_world.h
+@@ -91,6 +91,13 @@ struct OllamaWorldSnapshot
+     // being in the channel. Use RealPlayerInChannel for the real answer.
+     bool RealPlayerInZoneAndFaction(Player* who) const;
+ 
++    // solo-azeroth: the nearest real player of this bot's faction on the same
++    // map (continent), or nullptr. With one real player on a 1000-bot realm,
++    // "in the same zone" leaves almost every bot with nobody to talk to; the
++    // zone channels are joined by name, so a bot anywhere on the continent
++    // can speak in the channel that player is actually reading.
++    Player* NearestRealPlayerOnMap(Player* who) const;
++
+     // The actual audience tests. Nothing may be sent to the LLM for a
+     // destination unless one of these says a human would see it -- an answer
+     // nobody reads still costs a full generation.
