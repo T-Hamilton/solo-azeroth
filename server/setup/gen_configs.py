@@ -262,7 +262,13 @@ def load_prompts(path):
     return out
 
 
-PROMPTS = load_prompts(os.path.join(SERVER, "personalities", "prompts.txt"))
+_prompts_txt = os.path.join(SERVER, "personalities", "prompts.txt")
+_prompts_example = os.path.join(SERVER, "personalities", "prompts.example.txt")
+if not os.path.exists(_prompts_txt) and os.path.exists(_prompts_example):
+    import shutil
+    shutil.copy(_prompts_example, _prompts_txt)   # prompts.txt is yours and not versioned; the example seeds it once
+    print("prompts.txt created from prompts.example.txt")
+PROMPTS = load_prompts(_prompts_txt)
 OLLAMA.update(PROMPTS)
 if "OllamaChat.RandomChatterQuestionVariations" in PROMPTS:
     OLLAMA["OllamaChat.RandomChatterQuestionChance"] = "30"

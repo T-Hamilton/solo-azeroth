@@ -21,3 +21,4 @@ client-patches/ghost-paladin/
 # your bot personalities and the SQL pack built from them stay on your machine; the repo ships personalities.example.txt
 server/personalities/personalities.txt
 server/personalities/*.sql
+server/personalities/prompts.txt
