@@ -25,7 +25,7 @@ This repo holds only our own scripts and docs. It never contains game data: you 
 
 - Windows 10/11, 64-bit.
 - A World of Warcraft 3.3.5a client (build 12340), any language.
-- A GPU for the chat model. The default, Gemma 3 12B abliterated at Q4 (7.3 GB), wants about 9 GB of VRAM. Any Ollama
+- A GPU for the chat model. The default, Gemma 4 12B abliterated (7.6 GB), wants about 10 GB of VRAM. Any Ollama
   model works: pick a smaller one on a smaller card (see [docs/LLM-CHAT.md](docs/LLM-CHAT.md)). Without a GPU the
   bots still play, they just do not talk.
 - About 45 GB of disk: 8 for the build, 7 for the extracted world data, 5 for MySQL, 9 for the model, plus your client.
