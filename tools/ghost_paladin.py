@@ -164,6 +164,9 @@ PALETTES = {
     # (so additive glows keep their falloff: black stays black, a bright yellow core becomes a bright blue-white core).
     "ghost":  [(0, 0, 0), (70, 130, 255), (236, 248, 255)],
     "purple": [(0, 0, 0), (150, 70, 235), (240, 226, 255)],
+    # mount skins are ordinary (non-additive) textures: they can carry real shadows, so the low stop is deep navy
+    # rather than black, and build_mounts adds a contrast stretch on top
+    "ghost_mount": [(6, 10, 48), (60, 120, 240), (245, 250, 255)],
 }
 
 
@@ -178,7 +181,7 @@ TEXTURE_GAIN = {
 }
 
 
-def make_mapper(palette, gain=1.0):
+def make_mapper(palette, gain=1.0, contrast=1.0):
     lo, mid, hi = PALETTES[palette]
 
     def grad(l):
@@ -197,6 +200,8 @@ def make_mapper(palette, gain=1.0):
         if w <= 0.0:
             return (r, g, b)
         lum = min(1.0, gain * (0.30 * r + 0.59 * g + 0.11 * b) / 255.0)
+        if contrast != 1.0:
+            lum = min(1.0, max(0.0, 0.5 + (lum - 0.5) * contrast))   # stretch around mid-grey
         tr, tg, tb = grad(lum)
         return tuple(int(round(min(255.0, max(0.0, o * (1.0 - w) + t * w))))
                      for o, t in ((r, tr), (g, tg), (b, tb)))
@@ -403,7 +408,11 @@ MOUNTS = [
 CDI_TEX = (6, 7, 8)   # TextureVariation fields of CreatureDisplayInfo (3.3.5, 16 fields)
 
 
-def build_mounts(client, rgb, server_dbc_dir):
+MOUNT_CONTRAST = 1.8
+
+
+def build_mounts(client, rgb_unused, server_dbc_dir):
+    rgb = make_mapper("ghost_mount", 1.0, MOUNT_CONTRAST)   # the mounts get their own, higher-contrast curve
     cdi_raw = client.read("DBFilesClient\\CreatureDisplayInfo.dbc")
     cmd_raw = client.read("DBFilesClient\\CreatureModelData.dbc")
     if not cdi_raw or not cmd_raw:
