@@ -73,6 +73,20 @@ def add_class_combos(dbc_path, combos_path):
 
 add_class_combos(os.path.join(dbc, "CharBaseInfo.dbc"), os.path.join(root, "client-patches", "class-combos.txt"))
 
+# Ghost Paladin (tools/ghost_paladin.py build ...): recoloured paladin spell effects. Its output overrides the stock
+# Spell / SpellVisual* tables copied above and adds the cloned models and textures.
+ghost = os.path.join(root, "client-patches", "ghost-paladin")
+if os.path.isdir(ghost):
+    n = 0
+    for dirpath, _, files in os.walk(ghost):
+        rel = os.path.relpath(dirpath, ghost)
+        dst = os.path.join(build, rel) if rel != "." else build
+        os.makedirs(dst, exist_ok=True)
+        for f in files:
+            shutil.copy(os.path.join(dirpath, f), dst)
+            n += 1
+    print("ghost-paladin: %d files folded in" % n)
+
 out = os.path.join(root, "client-patches", "patch-Z.MPQ")
 subprocess.check_call([sys.executable, os.path.join(root, "tools", "mpq_writer.py"), out, build])
 subprocess.check_call([sys.executable, os.path.join(root, "tools", "mpq_verify.py"), out, build])

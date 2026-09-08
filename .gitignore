@@ -16,3 +16,4 @@ __pycache__/
 local/
 client-patches/build-patchZ/
 client-patches/*.MPQ
+client-patches/ghost-paladin/
