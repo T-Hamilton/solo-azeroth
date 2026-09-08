@@ -102,7 +102,7 @@ function Install-PersonalityPacks {
     $dst = "$($S.ServerDir)\azerothcore\modules\mod-ollama-chat\data\sql\characters\updates"
     if (-not (Test-Path $dst)) { return }
     # personalities.txt and the SQL built from it are not versioned: build them (from personalities.example.txt on a fresh clone)
-    if (-not (Get-ChildItem "$($S.ServerDir)\personalities\*.sql" -ErrorAction SilentlyContinue)) { & $Py "$($S.RootDir)	oolsuild_personalities.py" --no-reload 2>$null }
+    if (-not (Get-ChildItem "$($S.ServerDir)\personalities\*.sql" -ErrorAction SilentlyContinue)) { & $Py "$($S.RootDir)\tools\build_personalities.py" --no-reload 2>$null }
     Get-ChildItem "$($S.ServerDir)\personalities\*.sql" -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName $dst -Force; Write-Host "personality pack: $($_.Name)" }
 }
 
