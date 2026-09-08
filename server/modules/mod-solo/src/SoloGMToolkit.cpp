@@ -41,7 +41,7 @@ namespace
     enum CharAction : uint32
     {
         CHAR_HEAL = 1, CHAR_REVIVE, CHAR_COOLDOWNS, CHAR_LEVEL1, CHAR_LEVEL5, CHAR_LEVEL10, CHAR_MAXSKILL,
-        CHAR_REPAIR, CHAR_GOLD, CHAR_XPPOTIONS
+        CHAR_REPAIR, CHAR_GOLD, CHAR_XPPOTIONS, CHAR_MOUNTS
     };
     constexpr uint32 ACTION_MAIN = 1000;   // "back to the main menu" in every submenu
 
@@ -219,6 +219,7 @@ namespace
         AddGossipItemFor(p, GOSSIP_ICON_VENDOR,     "Repair all gear",                 MENU_CHAR, CHAR_REPAIR);
         AddGossipItemFor(p, GOSSIP_ICON_MONEY_BAG,  "Add 100 gold",                    MENU_CHAR, CHAR_GOLD);
         AddGossipItemFor(p, GOSSIP_ICON_VENDOR,     "Give 5 Potions of Experience",    MENU_CHAR, CHAR_XPPOTIONS);
+        AddGossipItemFor(p, GOSSIP_ICON_TAXI,       "Learn class mounts + riding",     MENU_CHAR, CHAR_MOUNTS);
         AddGossipItemFor(p, GOSSIP_ICON_CHAT,       "<- Back",                         MENU_CHAR, ACTION_MAIN);
         Send(p, item);
     }
@@ -286,6 +287,34 @@ namespace
                 if (!p->AddItem(XP_POTION_ITEM, 5))
                     Msg(p, "GM Toolkit: no bag space for the potions.");
                 break;
+            case CHAR_MOUNTS:
+            {
+                // riding first (Journeyman implies Apprentice), then the class mounts by class
+                for (uint32 s : { 33388u, 33391u })
+                    if (!p->HasSpell(s)) p->learnSpell(s);
+                std::string what = "riding";
+                switch (p->getClass())
+                {
+                    case CLASS_PALADIN:
+                        for (uint32 s : { 13819u, 23214u })   // Warhorse, Charger (Alliance models; any race on this realm)
+                            if (!p->HasSpell(s)) p->learnSpell(s);
+                        what += ", Summon Warhorse, Summon Charger";
+                        break;
+                    case CLASS_WARLOCK:
+                        for (uint32 s : { 5784u, 23161u })    // Felsteed, Dreadsteed
+                            if (!p->HasSpell(s)) p->learnSpell(s);
+                        what += ", Felsteed, Dreadsteed";
+                        break;
+                    case CLASS_DEATH_KNIGHT:
+                        if (!p->HasSpell(48778u)) p->learnSpell(48778u);   // Acherus Deathcharger
+                        what += ", Acherus Deathcharger";
+                        break;
+                    default:
+                        break;
+                }
+                Msg(p, "GM Toolkit: learned " + what + ". Check the General and Mounts tabs of the spellbook.");
+                break;
+            }
             default: break;
         }
     }

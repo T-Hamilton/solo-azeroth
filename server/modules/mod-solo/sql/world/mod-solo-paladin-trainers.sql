@@ -80,3 +80,10 @@ VALUES
 
 -- the source trainers carry SmartAI scripts keyed by their own entry; the copies have none, so no AI name
 UPDATE creature_template SET AIName = '' WHERE entry IN (9200101, 9200102, 9200103);
+
+-- the Forsaken trainers (trainer list 4, the Horde paladin list) also offer the Alliance-model Warhorse / Charger
+-- spells, which is what mod-solo teaches Undead paladins; their race lock is cleared in SkillLineAbility.dbc
+DELETE FROM trainer_spell WHERE TrainerId = 4 AND SpellId IN (13819, 23214);
+INSERT INTO trainer_spell (TrainerId, SpellId, MoneyCost, ReqSkillLine, ReqSkillRank, ReqAbility1, ReqAbility2, ReqAbility3, ReqLevel, VerifiedBuild) VALUES
+    (4, 13819, 1000, 0, 0, 0, 0, 0, 20, 0),
+    (4, 23214, 3500, 0, 0, 13819, 33391, 0, 40, 0);

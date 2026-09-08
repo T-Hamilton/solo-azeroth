@@ -6,6 +6,7 @@
  * Learn them directly at the usual levels instead. Riding itself is still bought from a riding trainer.
  */
 #include "Chat.h"
+#include "Log.h"
 #include "Player.h"
 #include "ScriptMgr.h"
 #include "SharedDefines.h"
@@ -25,6 +26,8 @@ namespace
     {
         if (!NeedsHelp(p))
             return;
+        LOG_INFO("server.loading", "mod-solo mounts: {} (level {}) knows Warhorse={} Charger={} riding={}",
+                 p->GetName(), p->GetLevel(), p->HasSpell(SPELL_WARHORSE), p->HasSpell(SPELL_CHARGER), p->GetSkillValue(SKILL_RIDING));
         bool learned = false;
         if (p->GetLevel() >= 20 && !p->HasSpell(SPELL_WARHORSE))
         {
