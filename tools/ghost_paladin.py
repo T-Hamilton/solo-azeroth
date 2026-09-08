@@ -589,6 +589,13 @@ def build_mounts(client, rgb_unused, server_dbc_dir):
             else:
                 table.append(row)
         sql.append("UPDATE creature_template_model SET CreatureDisplayID = %d WHERE CreatureID = %d AND Idx = 0;   -- %s" % (new_id, creature, label))
+        # the new display reuses the source model, so its creature_model_info (bounding radius, reach, gender) is the
+        # source's. Without this row the server can't resolve the display and the client draws a white placeholder.
+        sql.append(
+            "INSERT INTO creature_model_info (DisplayID, BoundingRadius, CombatReach, Gender, DisplayID_Other_Gender) "
+            "SELECT %d, BoundingRadius, CombatReach, Gender, DisplayID_Other_Gender FROM creature_model_info WHERE DisplayID = %d "
+            "ON DUPLICATE KEY UPDATE BoundingRadius=VALUES(BoundingRadius), CombatReach=VALUES(CombatReach), Gender=VALUES(Gender), DisplayID_Other_Gender=VALUES(DisplayID_Other_Gender);   -- %s model info from display %d"
+            % (new_id, src_id, label, src_id))
         print("mount %s: display %d -> %d, model %s" % (label, src_id, new_id, model_path))
     cdi.write(os.path.join(tmp, "CreatureDisplayInfo.dbc"))
     if not os.path.exists(server_path + ".stock"):
