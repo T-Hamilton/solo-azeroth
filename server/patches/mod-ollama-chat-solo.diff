@@ -134,7 +134,7 @@ index 1bf4a26..af8fc7f 100644
  // Topic engine
  // --------------------------------------------
 diff --git a/src/mod-ollama-chat_dispatch.cpp b/src/mod-ollama-chat_dispatch.cpp
-index f1364df..8232e6e 100644
+index f1364df..c86dbad 100644
 --- a/src/mod-ollama-chat_dispatch.cpp
 +++ b/src/mod-ollama-chat_dispatch.cpp
 @@ -11,6 +11,7 @@
@@ -161,22 +161,24 @@ index f1364df..8232e6e 100644
      // --- shared state -----------------------------------------------------
  
      std::mutex              g_queueMutex;
-@@ -263,7 +271,13 @@ namespace
+@@ -263,8 +271,15 @@ namespace
              case SRC_GENERAL_LOCAL:
              {
                  Channel* channel = ResolveChannel(bot, c.request.channelName);
 -                if (!channel || !bot->IsInChannel(channel))
 +                if (!channel)
-+                    return false;
+                     return false;
 +                // solo-azeroth: bots only join the General of the zone they logged in to and never re-join when
 +                // they travel, so membership goes stale. Join on their behalf rather than dropping the line.
-+                if (!bot->IsInChannel(channel))
-+                    channel->JoinChannel(bot, "");
-+                if (!bot->IsInChannel(channel))
-                     return false;
++                // Always join: Player::IsInChannel compares channel IDs, so a bot sitting in "General - Durotar"
++                // counted as a member of "General - Orgrimmar", the join was skipped and Channel::Say threw the
++                // line away as "not a member" while we counted it as delivered. JoinChannel on a constant
++                // channel the bot is already in returns silently, so this is safe to call every time.
++                channel->JoinChannel(bot, "");
  
                  // Checked before generating too; re-checked because the only
-@@ -273,6 +287,11 @@ namespace
+                 // human in the channel can leave during the LLM round trip.
+@@ -273,6 +288,11 @@ namespace
  
                  channel->Say(bot->GetGUID(), c.text, LANG_UNIVERSAL);
                  outChannel = channel;
@@ -188,7 +190,7 @@ index f1364df..8232e6e 100644
                  return true;
              }
  
-@@ -324,15 +343,15 @@ namespace
+@@ -324,15 +344,15 @@ namespace
          }
      }
  
@@ -207,7 +209,7 @@ index f1364df..8232e6e 100644
  
          const ObjectGuid botGuid = bot->GetGUID();
  
-@@ -348,24 +367,25 @@ namespace
+@@ -348,24 +368,25 @@ namespace
          // the same answer is correct -- suppressing it leaves the asker
          // staring at silence, which reads as the bot being broken rather than
          // as anti-repetition working.
@@ -239,7 +241,7 @@ index f1364df..8232e6e 100644
          }
  
          Channel* channel = nullptr;
-@@ -375,12 +395,24 @@ namespace
+@@ -375,12 +396,24 @@ namespace
                  LOG_INFO("module.ollamachat",
                           "[Ollama Chat] Bot {} had nowhere to send its reply ({}).",
                           bot->GetName(), ChatChannelSourceLocalStr[c.request.source]);
@@ -265,7 +267,7 @@ index f1364df..8232e6e 100644
          // This bot is now in a conversation with whoever it just answered, so
          // their next line in this scope is a turn in it rather than ambient
          // chatter. Only against a real person: an open conversation bypasses
-@@ -431,6 +463,7 @@ namespace
+@@ -431,6 +464,7 @@ namespace
              ProcessBotChatMessage(bot, c.text, c.request.source, channel,
                                    static_cast<uint8_t>(c.request.chainDepth + 1));
          }
@@ -273,7 +275,7 @@ index f1364df..8232e6e 100644
      }
  }
  
-@@ -583,17 +616,43 @@ void OllamaDispatch_Update(uint32_t /*diff*/)
+@@ -583,17 +617,43 @@ void OllamaDispatch_Update(uint32_t /*diff*/)
      OllamaWorldSnapshot world;
      world.Build();
  
@@ -319,7 +321,7 @@ index f1364df..8232e6e 100644
  }
  
  void OllamaChat_DispatchEmoteReaction(Player* bot, Player* player, uint32_t textEmote)
-@@ -700,6 +759,11 @@ OllamaDispatchStats OllamaDispatch_GetStats()
+@@ -700,6 +760,11 @@ OllamaDispatchStats OllamaDispatch_GetStats()
  }
  
  Channel* OllamaResolveZoneChannel(Player* bot, uint32_t chatChannelId)
@@ -331,7 +333,7 @@ index f1364df..8232e6e 100644
  {
      if (!bot)
          return nullptr;
-@@ -708,11 +772,9 @@ Channel* OllamaResolveZoneChannel(Player* bot, uint32_t chatChannelId)
+@@ -708,11 +773,9 @@ Channel* OllamaResolveZoneChannel(Player* bot, uint32_t chatChannelId)
      if (!mgr)
          return nullptr;
  
@@ -632,7 +634,7 @@ index 5f5611d..2465415 100644
  
  void Governor_OnPlayerLogout(ObjectGuid guid);
 diff --git a/src/mod-ollama-chat_handler.cpp b/src/mod-ollama-chat_handler.cpp
-index 264d845..fc8a9c2 100644
+index 264d845..7ac8aec 100644
 --- a/src/mod-ollama-chat_handler.cpp
 +++ b/src/mod-ollama-chat_handler.cpp
 @@ -126,8 +126,14 @@ static bool OllamaIsDirectAddress(Player* bot, Player* speaker, ChatChannelSourc
@@ -676,6 +678,15 @@ index 264d845..fc8a9c2 100644
      }
      else
      {
+@@ -1303,7 +1322,7 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
+         for (auto const& playerItr : allPlayers)
+         {
+             Player* candidateReal = playerItr.second;
+-            if (!candidateReal || !candidateReal->IsInChannel(channel))
++            if (!candidateReal || !OllamaPlayerInChannelInstance(candidateReal, channel))   // exact instance (Player::IsInChannel matches by id)
+                 continue;
+ 
+             if (OllamaIsRealPlayer(candidateReal))
 @@ -1350,14 +1369,22 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
              const bool isGlobalChannel = (chanId == uint32(ChatChannelId::WORLD_DEFENSE) ||
                                            chanId == uint32(ChatChannelId::LOOKING_FOR_GROUP));
@@ -1313,13 +1324,50 @@ index 0e7368a..145f3d4 100644
  
      return Trim(s);
 diff --git a/src/mod-ollama-chat_world.cpp b/src/mod-ollama-chat_world.cpp
-index 5793c70..7f2714a 100644
+index 5793c70..3e2c844 100644
 --- a/src/mod-ollama-chat_world.cpp
 +++ b/src/mod-ollama-chat_world.cpp
-@@ -112,6 +112,23 @@ bool OllamaWorldSnapshot::RealPlayerInChannel(Channel* channel) const
+@@ -1,4 +1,5 @@
+ #include "mod-ollama-chat_world.h"
++#include "mod-ollama-chat_dispatch.h"   // OllamaResolveZoneChannelFor
+ 
+ #include "AreaDefines.h"
+ #include "Channel.h"
+@@ -106,12 +107,53 @@ bool OllamaWorldSnapshot::RealPlayerInChannel(Channel* channel) const
+         return false;
+ 
+     for (Player* player : realPlayers)
+-        if (player->IsInChannel(channel))
++        if (OllamaPlayerInChannelInstance(player, channel))
+             return true;
+ 
      return false;
  }
  
++// Player::IsInChannel in this core compares channel IDs, so a person in
++// "General - Tirisfal Glades" passed as a member of every General channel on
++// the realm and bots spoke into channels nobody was reading. Channel's own
++// member list (IsOn) is private, so: same id, and for a zone-scoped channel
++// the instance that belongs to the player's own zone must be this one. The
++// core keeps a player in exactly one instance per zone-scoped id.
++bool OllamaPlayerInChannelInstance(Player* player, Channel* channel)
++{
++    if (!player || !channel)
++        return false;
++    if (!player->IsInChannel(channel))
++        return false;
++
++    const uint32_t id = channel->GetChannelId();
++    if (id == 0)
++        return true;    // custom channel: nothing better available
++
++    // ChatChannels.dbc: 26 = LookingForGroup, 23 = WorldDefense -- one instance per team.
++    if (id == 26 || id == 23)
++        return true;
++
++    return OllamaResolveZoneChannelFor(player, id, player->GetZoneId()) == channel;
++}
++
 +std::string OllamaWorldSnapshot::RealPlayerNamesInChannel(Channel* channel) const
 +{
 +    std::string names;
@@ -1328,7 +1376,7 @@ index 5793c70..7f2714a 100644
 +
 +    for (Player* player : realPlayers)
 +    {
-+        if (!player->IsInChannel(channel))
++        if (!OllamaPlayerInChannelInstance(player, channel))
 +            continue;
 +        if (!names.empty())
 +            names += ", ";
@@ -1340,7 +1388,7 @@ index 5793c70..7f2714a 100644
  bool OllamaGroupHasRealPlayer(Player* who)
  {
      Group* group = who ? who->GetGroup() : nullptr;
-@@ -140,3 +157,27 @@ bool OllamaWorldSnapshot::RealPlayerInZoneAndFaction(Player* who) const
+@@ -140,3 +182,27 @@ bool OllamaWorldSnapshot::RealPlayerInZoneAndFaction(Player* who) const
      }
      return false;
  }
@@ -1369,10 +1417,10 @@ index 5793c70..7f2714a 100644
 +    return best;
 +}
 diff --git a/src/mod-ollama-chat_world.h b/src/mod-ollama-chat_world.h
-index 52f9cde..25161f8 100644
+index 52f9cde..b991603 100644
 --- a/src/mod-ollama-chat_world.h
 +++ b/src/mod-ollama-chat_world.h
-@@ -91,10 +91,21 @@ struct OllamaWorldSnapshot
+@@ -91,10 +91,24 @@ struct OllamaWorldSnapshot
      // being in the channel. Use RealPlayerInChannel for the real answer.
      bool RealPlayerInZoneAndFaction(Player* who) const;
  
@@ -1393,4 +1441,7 @@ index 52f9cde..25161f8 100644
 +    std::string RealPlayerNamesInChannel(Channel* channel) const;
  };
  
++// solo-azeroth: exact-instance membership (Player::IsInChannel only compares channel ids).
++bool OllamaPlayerInChannelInstance(Player* player, Channel* channel);
++
  #endif // MOD_OLLAMA_CHAT_WORLD_H
