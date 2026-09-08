@@ -21,6 +21,7 @@
   "QuestDropRate": 3,
   "QuestXPRate": 2,
   "KillXPRate": 3,
+  "ProfessionRate": 5,
   "OllamaUrl": "http://localhost:11434",
   "OllamaModel": "huihui_ai/gemma-4-abliterated:12b",
   "OllamaParallel": 4,

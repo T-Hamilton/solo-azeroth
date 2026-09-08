@@ -91,6 +91,9 @@ WORLD = {
     "Rate.XP.Quest": str(S.get("QuestXPRate", 1)),
     "Rate.XP.Quest.DF": str(S.get("QuestXPRate", 1)),
     "Rate.XP.Kill": str(S.get("KillXPRate", 1)),
+    # profession skill points gained per successful craft / gather (retail = 1). Live: .reload config
+    "SkillGain.Crafting": str(S.get("ProfessionRate", 1)),
+    "SkillGain.Gathering": str(S.get("ProfessionRate", 1)),
     "Appender.Server": "2,6,17,Server.log,w",
     # ChatDebug 2: also trace every channel join/leave packet the client sends (CMSG_JOIN_CHANNEL ...) into Server.log
     **({"Logger.chat.system": "5,Console Server"} if S.get("ChatDebug", 0) >= 2 else {}),   # 1 = timestamp every line, 16 = keep the previous log as Server.log.<date> on restart

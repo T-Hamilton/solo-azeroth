@@ -179,6 +179,9 @@ party), `.gm on`, `.tele orgrimmar`, `.modify speed 3`.
 - **Levelling speed:** Bot Settings > World > "Quest experience" and "Kill experience", then Reload. The defaults
   are 2x quest XP and 3x kill XP (`"QuestXPRate"`, `"KillXPRate"` in `settings.local.json`). Potions of
   Experience multiply on top of these.
+- **Profession speed:** Bot Settings > World > "Crafting skill-ups per craft" and "Gathering skill-ups per gather",
+  then Reload. Default 5 (5 skill points per success, so professions level 5x faster). `"ProfessionRate"` in
+  `settings.local.json` sets both.
 - **Ports, realm name, account, model:** `settings.local.json`, then `solo.cmd configs`, then restart.
 - **The chat governor (how often bots speak, how long threads run):** the `OLLAMA` table in
   `setup\gen_configs.py`, explained knob by knob in `docs/LLM-CHAT.md`. Then `solo.cmd configs` and `.ollama reload`.
