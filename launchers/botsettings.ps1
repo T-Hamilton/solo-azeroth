@@ -1,5 +1,5 @@
-# botsettings.ps1 - the Bot Settings window: bots, chat and advanced tabs, with real controls.
-# Edits runtime\configs\modules\playerbots.conf and mod_ollama_chat.conf.
+# botsettings.ps1 - the Bot Settings window: bots, chat, advanced and world tabs, with real controls.
+# Edits runtime\configs\modules\playerbots.conf, mod_ollama_chat.conf and (World tab) worldserver.conf.
 #   Save                writes the files (bot settings apply on the next realm start, chat settings on "Reload chat")
 #   Reload chat         applies the chat tab to the running server right away (.ollama reload), no restart
 #   Save + restart      writes and restarts the realm (needed for the Bots tab)
@@ -12,9 +12,12 @@ Add-Type -AssemblyName System.Drawing
 $S = Get-Settings
 $botsConf = Join-Path $S.Runtime "configs\modules\playerbots.conf"
 $chatConf = Join-Path $S.Runtime "configs\modules\mod_ollama_chat.conf"
+$worldConf = Join-Path $S.Runtime "configs\worldserver.conf"
 
 # tab, file, key, label, kind (int:min:max | float:min:max | bool | text | model), help
 $defs = @(
+    # ---------------------------------------------------------------- World (worldserver.conf, applied by Reload)
+    @("World", "world", "Solo.QuestDropRate",                   "Quest item drop rate (x)",                      "float:0.1:20",   "every quest item everywhere drops this many times as often. 3 = a 10% drop becomes 30%; items already at 100% stay there. Applies on Reload"),
     # ---------------------------------------------------------------- Bots
     @("Bots", "bots", "AiPlayerbot.RandomBotAutologin",        "Spawn bots when the realm starts",              "bool",           "off = no bots at all until you add some by hand"),
     @("Bots", "bots", "AiPlayerbot.MinRandomBots",             "Minimum number of bots",                        "int:0:3000",     "how many bots live on the server. 200 = lively low-pop; 500+ wants a strong CPU"),
@@ -112,7 +115,7 @@ function Get-Models {
     return $names
 }
 
-$current = @{ bots = (Read-Conf $botsConf); chat = (Read-Conf $chatConf) }
+$current = @{ bots = (Read-Conf $botsConf); chat = (Read-Conf $chatConf); world = (Read-Conf $worldConf) }
 $models = Get-Models
 
 $form = New-Object System.Windows.Forms.Form
@@ -130,7 +133,7 @@ $tabs.Anchor = "Top,Bottom,Left,Right"
 $form.Controls.Add($tabs)
 
 $pages = @{}
-foreach ($name in @("Bots", "Chat", "Advanced")) {
+foreach ($name in @("Bots", "Chat", "Advanced", "World")) {
     $page = New-Object System.Windows.Forms.TabPage
     $page.Text = $name
     $page.AutoScroll = $true
@@ -190,7 +193,7 @@ foreach ($d in $defs) {
 }
 
 function Collect {
-    $v = @{ bots = @{}; chat = @{} }
+    $v = @{ bots = @{}; chat = @{}; world = @{} }
     foreach ($key in $controls.Keys) {
         $c, $kind, $file = $controls[$key]
         switch ($kind) {
@@ -207,7 +210,7 @@ function Save-Overrides($v) {
     $path = Join-Path $S.ServerDir "settings.local.json"
     $obj = if (Test-Path $path) { Get-Content $path -Raw | ConvertFrom-Json } else { [pscustomobject]@{} }
     $ov = [ordered]@{}
-    foreach ($pair in @(@("playerbots.conf", $v.bots), @("mod_ollama_chat.conf", $v.chat))) {
+    foreach ($pair in @(@("playerbots.conf", $v.bots), @("mod_ollama_chat.conf", $v.chat), @("worldserver.conf", $v.world))) {
         $h = [ordered]@{}
         foreach ($k in ($pair[1].Keys | Sort-Object)) { $h[$k] = $pair[1][$k] }
         $ov[$pair[0]] = $h
@@ -216,14 +219,14 @@ function Save-Overrides($v) {
     # no byte-order mark: Python's json module chokes on one
     [System.IO.File]::WriteAllText($path, ($obj | ConvertTo-Json -Depth 6), (New-Object System.Text.UTF8Encoding($false)))
 }
-function Save-All { $v = Collect; Write-Conf $botsConf $v.bots; Write-Conf $chatConf $v.chat; Save-Overrides $v }
+function Save-All { $v = Collect; Write-Conf $botsConf $v.bots; Write-Conf $chatConf $v.chat; Write-Conf $worldConf $v.world; Save-Overrides $v }
 
 $status = New-Object System.Windows.Forms.TextBox
 $status.Multiline = $true; $status.ReadOnly = $true; $status.ScrollBars = "Vertical"
 $status.Location = [System.Drawing.Point]::new(10, 580)
 $status.Size = [System.Drawing.Size]::new(785, 40)
 $status.Anchor = "Bottom,Left,Right"
-$status.Text = "runtime\configs\modules\playerbots.conf + mod_ollama_chat.conf"
+$status.Text = "runtime\configs\modules\playerbots.conf + mod_ollama_chat.conf + configs\worldserver.conf (World tab)"
 $form.Controls.Add($status)
 
 function Add-Button($text, $x, $action) {

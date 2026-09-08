@@ -2,10 +2,12 @@
 void AddSoloGMToolkitScripts();
 void AddSoloXPPotionScripts();
 void AddSoloPaladinMountsScripts();
+void AddSoloQuestDropsScripts();
 
 void Addmod_soloScripts()
 {
     AddSoloGMToolkitScripts();
     AddSoloXPPotionScripts();
     AddSoloPaladinMountsScripts();
+    AddSoloQuestDropsScripts();
 }

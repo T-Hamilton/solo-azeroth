@@ -173,6 +173,9 @@ party), `.gm on`, `.tele orgrimmar`, `.modify speed 3`.
   words", "use real WoW slang"...): Edit Prompts, which opens `server\personalities\prompts.txt` and reloads the
   running server when you close Notepad. This is what makes all bots sound alike; the personality text can only push
   against it. Loosen it here.
+- **Quest items dropping too rarely (or too often):** Bot Settings > World > "Quest item drop rate", then Reload.
+  3 = every quest drop lands three times as often as on retail; 1 = retail. Or `"QuestDropRate"` in
+  `settings.local.json`.
 - **Ports, realm name, account, model:** `settings.local.json`, then `solo.cmd configs`, then restart.
 - **The chat governor (how often bots speak, how long threads run):** the `OLLAMA` table in
   `setup\gen_configs.py`, explained knob by knob in `docs/LLM-CHAT.md`. Then `solo.cmd configs` and `.ollama reload`.

@@ -18,6 +18,7 @@
   "BotMinLevel": 1,
   "BotMaxLevel": 80,
   "BotMaps": "0,1,530,571",
+  "QuestDropRate": 3,
   "OllamaUrl": "http://localhost:11434",
   "OllamaModel": "huihui_ai/gemma-4-abliterated:12b",
   "OllamaParallel": 4,
