@@ -20,6 +20,13 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SERVER = os.path.join(ROOT, "server")
 SRC = os.path.join(SERVER, "personalities", "personalities.txt")
 OUT = os.path.join(SERVER, "personalities", "2026_09_06_00_personality_pack_genchat.sql")
+EXAMPLE = os.path.join(SERVER, "personalities", "personalities.example.txt")
+
+# personalities.txt is yours and stays out of git (so is the SQL built from it); a fresh clone starts from the example.
+if not os.path.exists(SRC) and os.path.exists(EXAMPLE):
+    import shutil
+    shutil.copy(EXAMPLE, SRC)
+    print("personalities.txt created from personalities.example.txt - edit it, it is not versioned")
 
 
 def settings():

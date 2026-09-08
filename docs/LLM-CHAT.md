@@ -58,7 +58,7 @@ random, uniformly, from every template with `manual_only = 0`, the first time it
 proportions in the pack are the distribution. `server\personalities\2026_09_06_00_personality_pack_genchat.sql`
 has 10 toxic, 6 normal and 4 nice voices and flips the 33 stock ones to manual-only.
 
-**Editing them:** the source of truth is the plain-text `server\personalities\personalities.txt`. The Desktop
+**Editing them:** the source of truth is the plain-text `server\personalities\personalities.txt`. That file and the SQL built from it are yours and stay out of git; the repo ships `personalities.example.txt` (the original 20 voices), which becomes your `personalities.txt` on first use. The Desktop
 shortcut **Solo Azeroth - Edit Personalities** opens it in Notepad and, when you close Notepad, rebuilds the SQL,
 applies it and reloads the bots (no restart). Same thing from a prompt: `solo.cmd personalities`. Each entry starts
 with `=== KEY ===` and the text until the next header is what the model is told; the file explains the rest. The
