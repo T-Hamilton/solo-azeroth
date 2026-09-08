@@ -736,14 +736,9 @@ def build(dbc_dir, data_dir, palette):
                 r[i] = new_sv[r[i]]
                 retargeted += 1
 
-    # Vanilla look-backs. WotLK gave Divine Protection (498) a small flash instead of the bubble it shared with
-    # Divine Shield (642) in vanilla; give the cloned Divine Protection visual Divine Shield's state kit (the bubble).
-    SV_STATE = 4
-    for target, source in ((498, 642),):
-        t, s = spell.by_id.get(target), spell.by_id.get(source)
-        if t and s and t[SPELL_VISUAL[0]] in sv.by_id and s[SPELL_VISUAL[0]] in sv.by_id:
-            sv.by_id[t[SPELL_VISUAL[0]]][SV_STATE] = sv.by_id[s[SPELL_VISUAL[0]]][SV_STATE]
-            print("visual override: spell %d takes the state kit (bubble) of spell %d" % (target, source))
+    # NOTE: an earlier build gave Divine Protection (498) the bubble state kit of Divine Shield (642), on the wrong
+    # assumption that they shared it in vanilla. In WotLK Divine Protection is a damage reduction, not an invuln, and
+    # keeps its own small flash. No override: the cloned Divine Protection visual keeps its own (recoloured) state kit.
 
     for d, name in ((spell, "Spell.dbc"), (sv, "SpellVisual.dbc"), (kit, "SpellVisualKit.dbc"), (efn, "SpellVisualEffectName.dbc")):
         d.write(os.path.join(OUT, "DBFilesClient", name))
