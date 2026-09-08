@@ -87,6 +87,10 @@ WORLD = {
     "SOAP.Enabled": "1", "SOAP.IP": q("127.0.0.1"), "SOAP.Port": str(S["SoapPort"]),
     # mod-solo: quest items drop this many times as often (entries already at 100% stay there). Live: .reload config
     "Solo.QuestDropRate": str(S.get("QuestDropRate", 1)),
+    # experience multipliers on the base (retail) values. Live: .reload config
+    "Rate.XP.Quest": str(S.get("QuestXPRate", 1)),
+    "Rate.XP.Quest.DF": str(S.get("QuestXPRate", 1)),
+    "Rate.XP.Kill": str(S.get("KillXPRate", 1)),
     "Appender.Server": "2,6,17,Server.log,w",
     # ChatDebug 2: also trace every channel join/leave packet the client sends (CMSG_JOIN_CHANNEL ...) into Server.log
     **({"Logger.chat.system": "5,Console Server"} if S.get("ChatDebug", 0) >= 2 else {}),   # 1 = timestamp every line, 16 = keep the previous log as Server.log.<date> on restart

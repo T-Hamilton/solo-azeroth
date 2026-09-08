@@ -18,6 +18,8 @@ $worldConf = Join-Path $S.Runtime "configs\worldserver.conf"
 $defs = @(
     # ---------------------------------------------------------------- World (worldserver.conf, applied by Reload)
     @("World", "world", "Solo.QuestDropRate",                   "Quest item drop rate (x)",                      "float:0.1:20",   "every quest item everywhere drops this many times as often. 3 = a 10% drop becomes 30%; items already at 100% stay there. Applies on Reload"),
+    @("World", "world", "Rate.XP.Quest",                        "Quest experience (x retail)",                   "float:0.1:20",   "multiplies the base XP of every quest turn-in. 2 = double. Potions of Experience multiply on top. Applies on Reload"),
+    @("World", "world", "Rate.XP.Kill",                         "Kill experience (x retail)",                    "float:0.1:20",   "multiplies XP from killing creatures. Applies on Reload"),
     # ---------------------------------------------------------------- Bots
     @("Bots", "bots", "AiPlayerbot.RandomBotAutologin",        "Spawn bots when the realm starts",              "bool",           "off = no bots at all until you add some by hand"),
     @("Bots", "bots", "AiPlayerbot.MinRandomBots",             "Minimum number of bots",                        "int:0:3000",     "how many bots live on the server. 200 = lively low-pop; 500+ wants a strong CPU"),
