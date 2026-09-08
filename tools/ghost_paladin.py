@@ -182,6 +182,23 @@ TEXTURE_GAIN = {
 }
 
 
+# Per-model palette overrides: model file basename substring (lower case) -> palette name in PALETTES. A handful of
+# effects read wrong against the undead theme in the default ghost blue; give just those models, and any texture used
+# ONLY by them, a different palette. Textures shared with a non-overridden model keep the global palette (build()
+# works this out from the full model set), so overriding one effect never recolours another.
+MODEL_PALETTE_OVERRIDES = {
+    "vengeance_state_hand": "purple",   # the Retribution "Vengeance" talent proc: ghost blue -> Forsaken purple
+}
+
+
+def model_palette(model_name, default_palette):
+    base = model_name.rsplit("\\", 1)[-1].lower()
+    for key, pal in MODEL_PALETTE_OVERRIDES.items():
+        if key in base:
+            return pal
+    return default_palette
+
+
 def make_mapper(palette, gain=1.0, contrast=1.0):
     lo, mid, hi = PALETTES[palette]
 
@@ -617,9 +634,31 @@ def build(dbc_dir, data_dir, palette):
     from PIL import Image as _I
     global Image
     Image = _I
-    rgb = make_mapper(palette)
     spell, sv, kit, efn, pal_spells, visuals, kits, efns, models = walk(dbc_dir)
     client = Client(data_dir)
+
+    # one mapper per (palette, gain); rgb is the default-palette mapper (also the one build_mounts ignores)
+    _mappers = {}
+    def mapper_for(pal, gain=1.0):
+        k = (pal, gain)
+        if k not in _mappers:
+            _mappers[k] = make_mapper(pal, gain)
+        return _mappers[k]
+    rgb = mapper_for(palette)
+
+    # Decide each texture's palette. A texture is recoloured with an override palette only when EVERY model that
+    # references it resolves to that same override; if any non-overridden model also uses it, it stays global. So an
+    # override recolours a texture only when it is exclusive to the overridden effect(s).
+    _tex_models = {}
+    for _m in models:
+        _d = client.read(_m)
+        if not _d:
+            continue
+        for _tofs, _ln, _fofs, _tname in m2_textures(bytearray(_d)):
+            _tex_models.setdefault(_tname.lower(), set()).add(_m)
+    def texture_palette(tname):
+        pals = {model_palette(u, palette) for u in _tex_models.get(tname.lower(), ())}
+        return next(iter(pals)) if len(pals) == 1 else palette
     print("paladin spells %d, visuals %d, kits %d, effect names %d, models %d, palette %s" %
           (len(pal_spells), len(visuals), len(kits), len(efns), len(models), palette))
 
@@ -641,7 +680,7 @@ def build(dbc_dir, data_dir, palette):
         new = None
         if data:
             gain = TEXTURE_GAIN.get(key.replace("/", "\\"), 1.0)
-            recoloured = recolor_blp_inplace(data, rgb if gain == 1.0 else make_mapper(palette, gain))
+            recoloured = recolor_blp_inplace(data, mapper_for(texture_palette(name), gain))
             if recoloured:
                 new = ghost_texture_name(name)
                 os.makedirs(os.path.dirname(out_path(new)), exist_ok=True)
@@ -670,7 +709,7 @@ def build(dbc_dir, data_dir, palette):
                     assert len(new) == len(name)
                     buf[fofs:fofs + len(name)] = new.encode("latin1")
                     stats["textures"] += 1
-            patch_m2_colors(buf, rgb)
+            patch_m2_colors(buf, mapper_for(model_palette(m, palette)))
         new_m2 = ghost_model_name(m)
         os.makedirs(os.path.dirname(out_path(new_m2)), exist_ok=True)
         open(out_path(new_m2), "wb").write(bytes(buf))
