@@ -63,8 +63,15 @@ function Start-Ollama {
     } else { Write-Host "Ollama: model $($S.OllamaModel) is ready" }
 }
 
+# A server that is still booting is not listening yet: checking only the port let a second start (another window,
+# the Play shortcut, Bot Settings) launch a duplicate that never binds and sits on 4 GB.
+function Running($name) {
+    return [bool](Get-Process $name -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$Runtime*" })
+}
+
 function Start-Auth {
     if (Listening $S.AuthPort) { Write-Host "authserver: already listening on $($S.AuthPort)"; return }
+    if (Running "authserver") { Write-Host "authserver: already starting"; return }
     New-Item -ItemType Directory -Force "$Runtime\logs" | Out-Null   # AC does not create LogsDir; without it file logging is silently off
     if (-not (Test-Path "$Configs\authserver.conf")) { Write-Host "missing $Configs\authserver.conf - run: .\solo.cmd configs"; return }
     Start-Process -FilePath "$Runtime\authserver.exe" -ArgumentList "-c", "`"$Configs\authserver.conf`"" -WorkingDirectory $Runtime
@@ -73,6 +80,7 @@ function Start-Auth {
 
 function Start-World {
     if (Listening $S.WorldPort) { Write-Host "worldserver: already listening on $($S.WorldPort)"; return }
+    if (Running "worldserver") { Write-Host "worldserver: already starting (give it a minute)"; return }
     New-Item -ItemType Directory -Force "$Runtime\logs" | Out-Null
     if (-not (Test-Path "$Configs\worldserver.conf")) { Write-Host "missing $Configs\worldserver.conf - run: .\solo.cmd configs"; return }
     Start-Process -FilePath "$Runtime\worldserver.exe" -ArgumentList "-c", "`"$Configs\worldserver.conf`"" -WorkingDirectory $Runtime
