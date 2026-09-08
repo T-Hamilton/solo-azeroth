@@ -156,10 +156,14 @@ weapon skills, repair, 100 gold, 5 Potions of Experience). A **Potion of Experie
 every source for one hour; each extra potion adds another +100% (up to five) and restarts the hour. Lost the
 toolkit? Relog. More potions: the toolkit, or `.additem 2461 5`.
 
-A **Dungeon Quests** panel is an optional addon: copy `client-addons\SoloDungeonQuests` into the client's
-`Interface\AddOns`, then type `/dq` in game (GM account required). It lists every dungeon by expansion; click one to
-add all of that dungeon's quests to your log at once. The list is generated from the world database by
-`tools\build_dungeon_quests.py`; re-run it if quests change. The quest log holds 25 at a time.
+**Dungeon quests** live in the toolkit too. Right-click it inside a dungeon and the first line is "Quests for this
+dungeon: <name> (N)": click it and every quest tied to that dungeon lands in your log. From anywhere, "Dungeon quests
+(pick a dungeon)" lists all 46 five-man dungeons by expansion (Classic, Burning Crusade, Wrath). Quests you already
+have or finished, quests for another race or class, and quests that start from a looted item are skipped; the chat
+line says what happened. The quest log holds 25 at a time, so turn some in and click again if it fills. The map is
+generated from the world database by `tools\build_dungeon_quests.py` (world table `solo_dungeon_quests`); re-run it
+and `solo.cmd configs` if quests change, then `.reload config` in game. The same list is also available as an
+optional addon (`client-addons\SoloDungeonQuests`, `/dq` in game) if you prefer a panel with tooltips.
 
 Commands, as GM: `.ollama status` (is the chat engine alive), `.ollama test hello` (one raw prompt, answer in the
 server console), `.ollama reload` (after changing chat settings), `.playerbots bot add <name>` (take a bot into your

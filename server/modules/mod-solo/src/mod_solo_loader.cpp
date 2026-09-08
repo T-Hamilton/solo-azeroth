@@ -4,6 +4,7 @@ void AddSoloXPPotionScripts();
 void AddSoloPaladinMountsScripts();
 void AddSoloQuestDropsScripts();
 void AddSoloClassSpellsScripts();
+void AddSoloDungeonQuestsScripts();
 
 void Addmod_soloScripts()
 {
@@ -12,4 +13,5 @@ void Addmod_soloScripts()
     AddSoloPaladinMountsScripts();
     AddSoloQuestDropsScripts();
     AddSoloClassSpellsScripts();
+    AddSoloDungeonQuestsScripts();
 }

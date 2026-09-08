@@ -2,14 +2,18 @@
  * SoloGMToolkit.cpp - the GM Toolkit item (entry 3878, ScriptName item_solo_gm_toolkit).
  *
  * One right-click opens a gossip menu with the things a solo GM reaches for all day: teleports (cities, starting
- * zones, dungeons/raids, "back to where I was"), GM toggles (god, GM mode, visibility, fly, speed, cast time,
- * cooldowns, infinite power, water walking, all flight paths, explore all) and character helpers (heal, revive,
- * clear cooldowns, level up, max skills, repair, gold, XP potions). Every GM-level account gets the item on login.
+ * zones, dungeons/raids, "back to where I was"), dungeon quests (every quest tied to a dungeon in one click, with a
+ * shortcut for the dungeon you are standing in - see SoloDungeonQuests.cpp), GM toggles (god, GM mode, visibility,
+ * fly, speed, cast time, cooldowns, infinite power, water walking, all flight paths, explore all) and character
+ * helpers (heal, revive, clear cooldowns, level up, max skills, repair, gold, XP potions). Every GM-level account
+ * gets the item on login.
  *
  * Stock data only: entry 3878 is "Deprecated Conjured Mana Jewel", an item every 3.3.5 client already has in Item.dbc,
  * renamed by sql/world/mod-solo-items.sql; its use spell is a stock instant dummy that OnUse intercepts before it is
  * cast. Teleport targets are looked up in game_tele by name; names missing from the table are simply not listed.
  */
+#include "SoloDungeonQuests.h"
+
 #include "Chat.h"
 #include "GossipDef.h"
 #include "Item.h"
@@ -31,8 +35,8 @@ namespace
     constexpr uint32 GM_TOOLKIT_ITEM = 3878;
     constexpr uint32 XP_POTION_ITEM  = 2461;   // Potion of Experience (SoloXPPotion.cpp)
 
-    enum Menu : uint32 { MENU_MAIN = 1, MENU_CITIES, MENU_START, MENU_DUNGEONS, MENU_GM, MENU_CHAR };
-    enum MainAction : uint32 { MAIN_CITIES = 1, MAIN_START, MAIN_DUNGEONS, MAIN_GM, MAIN_CHAR, MAIN_BACK, MAIN_CLOSE };
+    enum Menu : uint32 { MENU_MAIN = 1, MENU_CITIES, MENU_START, MENU_DUNGEONS, MENU_GM, MENU_CHAR, MENU_DQ_EXP, MENU_DQ_LIST };
+    enum MainAction : uint32 { MAIN_CITIES = 1, MAIN_START, MAIN_DUNGEONS, MAIN_GM, MAIN_CHAR, MAIN_BACK, MAIN_CLOSE, MAIN_DQ, MAIN_DQ_HERE };
     enum GmAction : uint32
     {
         GM_GOD = 1, GM_GMMODE, GM_VISIBLE, GM_FLY, GM_SPEED, GM_CASTTIME, GM_COOLDOWN, GM_POWER, GM_WATERWALK,
@@ -44,6 +48,7 @@ namespace
         CHAR_REPAIR, CHAR_GOLD, CHAR_XPPOTIONS, CHAR_MOUNTS, CHAR_RESPEC
     };
     constexpr uint32 ACTION_MAIN = 1000;   // "back to the main menu" in every submenu
+    constexpr uint32 ACTION_DQ_EXP = 999;  // "back to the expansion list" in a dungeon-quest list
 
     struct Tele { char const* label; char const* tele; };   // tele = game_tele.name
     Tele const CITIES[] =
@@ -157,6 +162,10 @@ namespace
         AddGossipItemFor(p, GOSSIP_ICON_TAXI,       "Teleport: dungeons and raids",   MENU_MAIN, MAIN_DUNGEONS);
         if (lastPos.count(p->GetGUID()))
             AddGossipItemFor(p, GOSSIP_ICON_TAXI,   "Back to where I was",            MENU_MAIN, MAIN_BACK);
+        if (SoloDungeon const* here = SoloDungeonForMap(p->GetMapId()))
+            AddGossipItemFor(p, GOSSIP_ICON_DOT,    "Quests for this dungeon: " + here->name + " (" + std::to_string(here->quests.size()) + ")", MENU_MAIN, MAIN_DQ_HERE);
+        if (!SoloDungeonList().empty())
+            AddGossipItemFor(p, GOSSIP_ICON_DOT,    "Dungeon quests (pick a dungeon)", MENU_MAIN, MAIN_DQ);
         AddGossipItemFor(p, GOSSIP_ICON_BATTLE,     "GM powers (god, fly, speed...)", MENU_MAIN, MAIN_GM);
         AddGossipItemFor(p, GOSSIP_ICON_INTERACT_1, "Character (heal, level, gold...)", MENU_MAIN, MAIN_CHAR);
         AddGossipItemFor(p, GOSSIP_ICON_CHAT,       "Close",                          MENU_MAIN, MAIN_CLOSE);
@@ -181,6 +190,48 @@ namespace
             AddGossipItemFor(p, GOSSIP_ICON_TAXI, STARTS[i].name, MENU_START, i);
         AddGossipItemFor(p, GOSSIP_ICON_CHAT, "<- Back", MENU_START, ACTION_MAIN);
         Send(p, item);
+    }
+
+    // Dungeon quests: expansion -> dungeon -> add all of its quests. One gossip page holds 32 rows, so the list is
+    // split by expansion (19 / 13 / 16 dungeons).
+    void ShowDungeonQuestExpansions(Player* p, Item* item)
+    {
+        ClearGossipMenuFor(p);
+        std::vector<std::string> const& exps = SoloDungeonExpansions();
+        for (uint32 i = 0; i < exps.size(); ++i)
+        {
+            uint32 n = 0;
+            for (SoloDungeon const& d : SoloDungeonList())
+                if (d.expansion == exps[i]) ++n;
+            AddGossipItemFor(p, GOSSIP_ICON_DOT, exps[i] + " (" + std::to_string(n) + " dungeons)", MENU_DQ_EXP, i);
+        }
+        AddGossipItemFor(p, GOSSIP_ICON_CHAT, "<- Back", MENU_DQ_EXP, ACTION_MAIN);
+        Send(p, item);
+    }
+
+    void ShowDungeonQuestList(Player* p, Item* item, uint32 expIndex)
+    {
+        std::vector<std::string> const& exps = SoloDungeonExpansions();
+        if (expIndex >= exps.size()) { ShowDungeonQuestExpansions(p, item); return; }
+        ClearGossipMenuFor(p);
+        std::vector<SoloDungeon> const& list = SoloDungeonList();
+        for (uint32 i = 0; i < list.size(); ++i)
+        {
+            SoloDungeon const& d = list[i];
+            if (d.expansion != exps[expIndex])
+                continue;
+            std::string label = d.name + " (lvl " + std::to_string(d.level) + ", " + std::to_string(d.quests.size()) + " quest" + (d.quests.size() == 1 ? "" : "s") + ")";
+            AddGossipItemFor(p, d.map == p->GetMapId() ? GOSSIP_ICON_BATTLE : GOSSIP_ICON_DOT, label, MENU_DQ_LIST, i);
+        }
+        AddGossipItemFor(p, GOSSIP_ICON_CHAT, "<- Expansions", MENU_DQ_LIST, ACTION_DQ_EXP);
+        AddGossipItemFor(p, GOSSIP_ICON_CHAT, "<- Back", MENU_DQ_LIST, ACTION_MAIN);
+        Send(p, item);
+    }
+
+    void GrantDungeon(Player* p, SoloDungeon const& d)
+    {
+        CloseGossipMenuFor(p);
+        Msg(p, SoloGrantDungeonQuests(p, d));
     }
 
     void ShowGM(Player* p, Item* item)
@@ -366,6 +417,13 @@ public:
                     case MAIN_DUNGEONS: ShowTeleList(p, item, MENU_DUNGEONS, DUNGEONS); return;
                     case MAIN_GM:       ShowGM(p, item); return;
                     case MAIN_CHAR:     ShowChar(p, item); return;
+                    case MAIN_DQ:       ShowDungeonQuestExpansions(p, item); return;
+                    case MAIN_DQ_HERE:
+                        if (SoloDungeon const* here = SoloDungeonForMap(p->GetMapId()))
+                            GrantDungeon(p, *here);
+                        else
+                            CloseGossipMenuFor(p);
+                        return;
                     case MAIN_BACK:
                     {
                         CloseGossipMenuFor(p);
@@ -394,6 +452,17 @@ public:
                     Start const& s = STARTS[action];
                     Go(p, s.map, s.x, s.y, s.z, s.o);
                 }
+                return;
+            case MENU_DQ_EXP:
+                ShowDungeonQuestList(p, item, action);
+                return;
+            case MENU_DQ_LIST:
+                if (action == ACTION_DQ_EXP)
+                    ShowDungeonQuestExpansions(p, item);
+                else if (action < SoloDungeonList().size())
+                    GrantDungeon(p, SoloDungeonList()[action]);
+                else
+                    CloseGossipMenuFor(p);
                 return;
             case MENU_GM:
                 DoGM(p, action);

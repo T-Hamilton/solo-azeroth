@@ -53,5 +53,7 @@ never touch its processes, DBs or repo from here, and do not run both cores' bui
 
 ## Current state (2026-09-08)
 Quest item drop rate x3, quest XP x2, kill XP x3 (all on the Bot Settings World tab). Paladins get Crusader Strike at
-level 8 (mod-solo `SoloClassSpells.cpp`). Paladin mounts use the Ochre Skeletal Warhorse palette (patch-Z rebuilt,
+level 8 (mod-solo `SoloClassSpells.cpp`). GM Toolkit has "Dungeon quests" (mod-solo `SoloDungeonQuests.cpp`, data in
+world table `solo_dungeon_quests` from `tools/build_dungeon_quests.py`; regenerate -> `solo.cmd configs` ->
+`.reload config`, no rebuild). The `/dq` addon in `client-addons/` is the optional client-side twin of that menu. Paladin mounts use the Ochre Skeletal Warhorse palette (patch-Z rebuilt,
 installs at the next Play with the game closed). See the end of `SUMMARY.md` for what was last verified in game.
