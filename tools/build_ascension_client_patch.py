@@ -32,8 +32,11 @@ if glue_dirs:
 elif not os.path.isdir(glue) or not os.listdir(glue):
     sys.exit("no GlueXML in %s - pass the stock GlueXML folders on the first build" % build)
 
-# class tables (character creation), spells, skill lines, talents, glyphs, stat curves
-WANT = re.compile(r"^(ChrClasses|CharBaseInfo|Spell[A-Za-z]*|Skill[A-Za-z]*|Talent[A-Za-z]*|Glyph[A-Za-z]*|gt[A-Za-z]*)\.dbc$")
+# class tables (character creation), spells, skill lines, talents, glyphs, stat curves, and the chat channel table:
+# Ascension's patch-M redefines ChatChannels.dbc (id 1 = a global "Ascension" channel, the zone channel is id 3
+# "Zone - %s"), so against a stock server the client joins id 1 as "Ascension", never asks for "General - <zone>",
+# and shows no General in the chat settings. The stock table puts General back.
+WANT = re.compile(r"^(ChrClasses|CharBaseInfo|ChatChannels|Spell[A-Za-z]*|Skill[A-Za-z]*|Talent[A-Za-z]*|Glyph[A-Za-z]*|gt[A-Za-z]*)\.dbc$")
 shutil.rmtree(dbc, ignore_errors=True)
 os.makedirs(dbc)
 names = sorted(f for f in os.listdir(dbc_src) if WANT.match(f))

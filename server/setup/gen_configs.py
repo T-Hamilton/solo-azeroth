@@ -85,7 +85,9 @@ WORLD = {
     "Motd": q(S["Motd"]),
     "CloseIdleConnections": "0",
     "SOAP.Enabled": "1", "SOAP.IP": q("127.0.0.1"), "SOAP.Port": str(S["SoapPort"]),
-    "Appender.Server": "2,6,17,Server.log,w",   # 1 = timestamp every line, 16 = keep the previous log as Server.log.<date> on restart
+    "Appender.Server": "2,6,17,Server.log,w",
+    # ChatDebug 2: also trace every channel join/leave packet the client sends (CMSG_JOIN_CHANNEL ...) into Server.log
+    **({"Logger.chat.system": "5,Console Server"} if S.get("ChatDebug", 0) >= 2 else {}),   # 1 = timestamp every line, 16 = keep the previous log as Server.log.<date> on restart
 }
 AUTH = {
     "RealmServerPort": str(S["AuthPort"]),
