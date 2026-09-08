@@ -9,6 +9,7 @@ patch-Z. Priests and everyone else keep their gold.
 
 usage: ghost_paladin.py scan  <stock dbc dir> <client Data dir>     list what is involved, change nothing
        ghost_paladin.py build <stock dbc dir> <client Data dir> [--palette ghost|purple]
+       ghost_paladin.py mounts <stock dbc dir> <client Data dir>     only the paladin mount skins (env GHOST_MOUNT_STYLE=ghost|ochre)
 """
 import glob, io, os, re, struct, sys
 
@@ -418,7 +419,94 @@ ACCENTS = {
 }
 
 
+# GHOST_MOUNT_STYLE=ochre: instead of ghost steel, borrow the palette of the Ochre Skeletal Warhorse (the Forsaken
+# racial mount, texture MountedDeathKnightCrimson_01): crimson barding cloth, dark tarnished purple-black steel, bone
+# ochre for the horse itself and brass-ochre trim. Each entry is a luminance gradient: (position, colour) stops.
+MOUNT_STYLE = os.environ.get("GHOST_MOUNT_STYLE", "ochre")
+OCHRE = {
+    # greys: the plate (mid greys) goes dark tarnished steel, the white horse (bright greys) goes bone ochre
+    "neutral": [(0.0, (14, 10, 12)), (0.5, (58, 46, 54)), (0.78, (110, 88, 74)), (1.0, (214, 196, 140))],
+    # the eye glow (an additive sprite): the skeletal warhorse's green
+    "glow":    [(0.0, (0, 0, 0)), (0.5, (50, 180, 60)), (1.0, (205, 255, 195))],
+    # the blue cloth and anything red -> crimson barding, dark stripes to lit folds
+    "cool":    [(0.0, (24, 5, 9)), (0.5, (120, 20, 26)), (1.0, (200, 74, 60))],
+    # gold trim, brown leather, the orange plume -> leather brown to brass ochre
+    "warm":    [(0.0, (32, 18, 10)), (0.5, (112, 72, 38)), (1.0, (198, 170, 108))],
+    "contrast": 1.4,
+}
+
+
+def gradient(stops):
+    def grad(l):
+        l = min(1.0, max(0.0, l))
+        for (p0, c0), (p1, c1) in zip(stops, stops[1:]):
+            if l <= p1:
+                t = 0.0 if p1 == p0 else (l - p0) / (p1 - p0)
+                return tuple(c0[i] + (c1[i] - c0[i]) * t for i in range(3))
+        return tuple(float(v) for v in stops[-1][1])
+    return grad
+
+
+def hue(r, g, b):
+    mx, mn = max(r, g, b), min(r, g, b)
+    d = float(mx - mn)
+    if d == 0:
+        return 0.0
+    if mx == r:
+        return (60.0 * ((g - b) / d)) % 360.0
+    if mx == g:
+        return 60.0 * ((b - r) / d) + 120.0
+    return 60.0 * ((r - g) / d) + 240.0
+
+
+def make_glow_mapper(stops):
+    """Additive glow sprite: black stays black, the colour follows luminance; grey/white cores are only tinted."""
+    grad = gradient(stops)
+
+    def rgb(r, g, b):
+        mx, mn = max(r, g, b), min(r, g, b)
+        sat = 0.0 if mx == 0 else (mx - mn) / float(mx)
+        w = min(1.0, max(0.0, (sat - 0.06) / 0.25))
+        lum = (0.30 * r + 0.59 * g + 0.11 * b) / 255.0
+        t = grad(lum)
+        return tuple(int(round(min(255.0, max(0.0, o * (1.0 - w) + v * w)))) for o, v in ((r, t[0]), (g, t[1]), (b, t[2])))
+    return rgb
+
+
+def mount_texture_mapper(default, texture_name):
+    """Per-texture override: the eye glow sprite gets its own colour in the ochre style."""
+    if MOUNT_STYLE == "ochre" and "eyeglow" in texture_name.lower():
+        return make_glow_mapper(OCHRE["glow"])
+    return default
+
+
+def make_ochre_mount_mapper(style=OCHRE):
+    neutral, cool, warm = gradient(style["neutral"]), gradient(style["cool"]), gradient(style["warm"])
+    contrast = style["contrast"]
+
+    def rgb(r, g, b):
+        mx, mn = max(r, g, b), min(r, g, b)
+        sat = 0.0 if mx == 0 else (mx - mn) / float(mx)
+        lum = (0.30 * r + 0.59 * g + 0.11 * b) / 255.0
+        lum = min(1.0, max(0.0, 0.5 + (lum - 0.5) * contrast))
+        if sat < 0.18:
+            t = neutral(lum)
+            w = 1.0
+        else:
+            h = hue(r, g, b)
+            t = warm(lum) if 20.0 <= h < 170.0 else cool(lum)   # blue cloth, reds and violets -> crimson
+            w = min(1.0, (sat - 0.06) / 0.25)
+            # the neutral curve takes over as saturation fades, so plate edges do not flip colour
+            n = neutral(lum)
+            t = tuple(n[i] * (1.0 - w) + t[i] * w for i in range(3))
+        return tuple(int(round(min(255.0, max(0.0, v)))) for v in t)
+
+    return rgb
+
+
 def make_mount_mapper():
+    if MOUNT_STYLE == "ochre":
+        return make_ochre_mount_mapper()
     steel = make_mapper("ghost_mount", 1.0, MOUNT_CONTRAST)
     lo, mid, hi = ACCENTS[MOUNT_ACCENT]
 
@@ -455,7 +543,7 @@ def make_mount_mapper():
 
 def build_mounts(client, rgb_unused, server_dbc_dir):
     rgb = make_mount_mapper()   # the mounts get their own two-tone, higher-contrast curve
-    print("mounts: accent colour", MOUNT_ACCENT)
+    print("mounts: style", MOUNT_STYLE, "accent colour", MOUNT_ACCENT if MOUNT_STYLE != "ochre" else "-")
     cdi_raw = client.read("DBFilesClient\\CreatureDisplayInfo.dbc")
     cmd_raw = client.read("DBFilesClient\\CreatureModelData.dbc")
     if not cdi_raw or not cmd_raw:
@@ -492,7 +580,7 @@ def build_mounts(client, rgb_unused, server_dbc_dir):
                     if not blp:
                         print("mounts: texture missing:", folder + "\\" + name + ".blp")
                         continue
-                    recoloured = recolor_blp_inplace(blp, rgb)
+                    recoloured = recolor_blp_inplace(blp, mount_texture_mapper(rgb, name))
                     dst = os.path.join(OUT, *(folder + "\\" + new_name + ".blp").split("\\"))
                     os.makedirs(os.path.dirname(dst), exist_ok=True)
                     open(dst, "wb").write(recoloured or blp)
@@ -678,6 +766,13 @@ def main():
         palette = sys.argv[sys.argv.index("--palette") + 1]
     if mode == "build":
         build(dbc_dir, data_dir, palette)
+        return
+    if mode == "mounts":   # only the paladin mount skins (fast; the spell effects are left as they are)
+        from PIL import Image as _I
+        global Image
+        Image = _I
+        os.makedirs(os.path.join(OUT, "DBFilesClient"), exist_ok=True)
+        build_mounts(Client(data_dir), None, dbc_dir)
         return
     spell, sv, kit, efn, pal_spells, visuals, kits, efns, models = walk(dbc_dir)
     print("paladin spells: %d, visuals: %d, kits: %d, effect names: %d, models: %d" %

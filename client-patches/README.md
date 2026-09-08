@@ -24,6 +24,12 @@ models, clones 96 visuals and 136 kits under new ids, and points the 740 paladin
 Delete that folder to go back to gold. Every caster of a paladin spell gets the look: effects belong to the spell,
 not to the race.
 
+The paladin mounts (Warhorse, Charger) get recoloured skins on their own display rows. The default style, `ochre`,
+borrows the palette of the Ochre Skeletal Warhorse, the Forsaken racial mount: crimson barding, tarnished steel, a
+bone-ochre horse and green eyes. `GHOST_MOUNT_STYLE=ghost` gives the blue-white ghost steel with a purple (or, with
+`GHOST_MOUNT_ACCENT=green`, plague-green) cloth instead. `tools\ghost_paladin.py mounts server\runtime\data\dbc <client
+Data dir>` rebuilds just the two skins in seconds; then rebuild patch-Z as below.
+
 Build it with `tools\build_ascension_client_patch.py server\runtime\data\dbc [<stock GlueXML folders>]` (the GlueXML
 folders are only needed the first time; later builds reuse them from `build-patchZ`). The launcher's
 `prelaunch.local.ps1` copies it into the client's `Data\` when it changes (the game must be closed for that) and keeps
