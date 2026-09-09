@@ -165,9 +165,9 @@ PALETTES = {
     # (so additive glows keep their falloff: black stays black, a bright yellow core becomes a bright blue-white core).
     "ghost":  [(0, 0, 0), (70, 130, 255), (236, 248, 255)],
     "purple": [(0, 0, 0), (150, 70, 235), (240, 226, 255)],
-    # near-neutral silver with only a whisper of blue: channels stay high and balanced (R~=G, B a hair higher) so it
-    # reads ghostly silver-white on the additive glows, never pink/cyan. Used by the Vengeance proc.
-    "silverblue": [(0, 0, 0), (176, 184, 204), (242, 246, 253)],
+    # ghostly silver-white with a faint wash of the ghost blue (70,130,255) blended in at low alpha (~12% mid, ~5%
+    # high): channels stay high so it never reads pink/cyan, just silver with a cool ghost tint. Used by Vengeance.
+    "silverblue": [(0, 0, 0), (163, 178, 210), (233, 240, 253)],
     # mount skins are ordinary (non-additive) textures: they can carry real shadows, so the low stop is deep navy
     # rather than black, and build_mounts adds a contrast stretch on top
     "ghost_mount": [(6, 10, 48), (60, 120, 240), (245, 250, 255)],
