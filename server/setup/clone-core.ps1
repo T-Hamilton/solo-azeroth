@@ -12,11 +12,14 @@ foreach ($m in @(@("mod-playerbots", "https://github.com/liyunfan1223/mod-player
     if (-not (Test-Path "$dir\.git")) { git clone $m[1] $dir } else { git -C $dir pull --ff-only }
 }
 # our fixes to mod-ollama-chat (channel auto-join, zone-based reply eligibility, realm-wide LFG chatter, tick diagnostics)
-$patch = Join-Path $server "patches\mod-ollama-chat-solo.diff"
-if (Test-Path $patch) {
-    git -C "$core\modules\mod-ollama-chat" apply --check $patch 2>$null
-    if ($LASTEXITCODE -eq 0) { git -C "$core\modules\mod-ollama-chat" apply $patch; Write-Host "applied patches\mod-ollama-chat-solo.diff" }
-    else { Write-Host "patches\mod-ollama-chat-solo.diff did not apply cleanly (already applied, or upstream changed) - check manually" -ForegroundColor Yellow }
+# and mod-playerbots (all shamans drop Windfury Totem in the air slot)
+foreach ($p in @(@("mod-ollama-chat", "mod-ollama-chat-solo.diff"), @("mod-playerbots", "mod-playerbots-solo.diff"))) {
+    $patch = Join-Path $server "patches\$($p[1])"
+    if (Test-Path $patch) {
+        git -C "$core\modules\$($p[0])" apply --check $patch 2>$null
+        if ($LASTEXITCODE -eq 0) { git -C "$core\modules\$($p[0])" apply $patch; Write-Host "applied patches\$($p[1])" }
+        else { Write-Host "patches\$($p[1]) did not apply cleanly (already applied, or upstream changed) - check manually" -ForegroundColor Yellow }
+    }
 }
 # our own module (GM Toolkit, XP potions) lives in server\modules\mod-solo; link it in so the core's CMake builds it
 $link = "$core\modules\mod-solo"

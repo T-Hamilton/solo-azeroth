@@ -1,0 +1,19 @@
+diff --git a/src/Bot/Factory/AiFactory.cpp b/src/Bot/Factory/AiFactory.cpp
+index 63e834fd..5e050b7c 100644
+--- a/src/Bot/Factory/AiFactory.cpp
++++ b/src/Bot/Factory/AiFactory.cpp
+@@ -328,10 +328,12 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
+                 engine->addStrategiesNoInit("fury", "aoe", "dps assist", nullptr);
+             break;
+         case CLASS_SHAMAN:
++            // solo-azeroth: every shaman drops Windfury Totem in the air slot (was "wrath of air" for ele/resto,
++            // which no bot knows until level 64 and so fell back to Grounding Totem). Enhancement already used it.
+             if (tab == SHAMAN_TAB_ELEMENTAL)
+-                engine->addStrategiesNoInit("ele", "stoneskin", "wrath", "mana spring", "wrath of air", nullptr);
++                engine->addStrategiesNoInit("ele", "stoneskin", "wrath", "mana spring", "windfury", nullptr);
+             else if (tab == SHAMAN_TAB_RESTORATION)
+-                engine->addStrategiesNoInit("resto", "stoneskin", "flametongue", "mana spring", "wrath of air", nullptr);
++                engine->addStrategiesNoInit("resto", "stoneskin", "flametongue", "mana spring", "windfury", nullptr);
+             else // if (tab == SHAMAN_TAB_ENHANCEMENT)
+                 engine->addStrategiesNoInit("enh", "strength of earth", "magma", "healing stream", "windfury", nullptr);
+ 
