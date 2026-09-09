@@ -126,6 +126,13 @@ BOTS = {
     "AiPlayerbot.RandomBotTalk": "0",
     "AiPlayerbot.EnableBroadcasts": "0",
     "AiPlayerbot.RandomBotSayWithoutMaster": "0",
+    # gearing your party: `autogear` may hand out epics, and `autogear bis [ilvl]` reads the playerbots_bis_gear table
+    # (per class/spec, tiers 66 MC .. 92 Naxx40, 120 .. 164 TBC, 200 .. 290 WotLK). `autogear bis X` refuses any X above
+    # AutoGearScoreLimit and 0 means "no cap", so set AutoGearScoreLimit in settings.local.json to the highest tier you
+    # want (92 = everything up to Naxx40 while you play the level-60 raids; 290 = anything). Apply live: .reload config
+    "AiPlayerbot.AutoGearQualityLimit": "4",
+    "AiPlayerbot.AutoGearBisCommand": "1",
+    "AiPlayerbot.AutoGearScoreLimit": str(S.get("AutoGearScoreLimit", 0)),
     "AiPlayerbot.SelfBotLevel": "1",                # 1 = GM may turn their own character into a bot with a command.
                                                     # NEVER 3: that attaches a bot AI to YOU on login, and the chat module then treats you as a bot.
     # where the bots hang out: with 1500 bots over four continents a capital had 7 of them. Half of every teleport
