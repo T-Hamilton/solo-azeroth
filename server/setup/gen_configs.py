@@ -129,7 +129,9 @@ BOTS = {
     # gearing your party: `autogear` may hand out epics, and `autogear bis [ilvl]` reads the playerbots_bis_gear table
     # (per class/spec, tiers 66 MC .. 92 Naxx40, 120 .. 164 TBC, 200 .. 290 WotLK). `autogear bis X` refuses any X above
     # AutoGearScoreLimit and 0 means "no cap", so set AutoGearScoreLimit in settings.local.json to the highest tier you
-    # want (92 = everything up to Naxx40 while you play the level-60 raids; 290 = anything). Apply live: .reload config
+    # want (92 = everything up to Naxx40 while you play the level-60 raids; 290 = anything). Apply live with
+    # `.playerbots rndbot reload` (console-capable: tools/soap.py "playerbots rndbot reload") - that is what re-reads the
+    # whole playerbots config; `.reload config` alone only refreshes the random-bot level rules.
     "AiPlayerbot.AutoGearQualityLimit": "4",
     "AiPlayerbot.AutoGearBisCommand": "1",
     "AiPlayerbot.AutoGearScoreLimit": str(S.get("AutoGearScoreLimit", 0)),

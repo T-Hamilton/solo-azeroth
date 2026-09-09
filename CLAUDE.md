@@ -55,6 +55,10 @@ never touch its processes, DBs or repo from here, and do not run both cores' bui
   `solo.cmd configs/start` runs it. `ValidateSkillLearnedBySpells` only governs the spell side and is not the fix.
 - The Bot Settings window replaces the whole `ConfOverrides` block of `settings.local.json` on every save, so keys
   added there by hand vanish. New knobs go in `gen_configs.py`'s WORLD/BOTS/OLLAMA tables.
+- Applying config changes live: worldserver.conf -> `reload config`; mod_ollama_chat.conf -> `ollama reload`;
+  playerbots.conf -> `playerbots rndbot reload` (re-runs PlayerbotAIConfig::Initialize; `reload config` does NOT
+  re-read it). All three work through `tools/soap.py`. Account/character generation (AddClassAccountPoolSize,
+  bot counts) only happens at worldserver start.
 - `AiPlayerbot.SelfBotLevel` must stay 1. Bots only log in while a real player is online.
 - Heredocs through the PowerShell/Bash tools have mangled backslashes in .ps1/.py before: write those with the
   Write/Edit tools.
