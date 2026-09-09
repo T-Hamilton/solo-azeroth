@@ -166,8 +166,11 @@ PALETTES = {
     "ghost":  [(0, 0, 0), (70, 130, 255), (236, 248, 255)],
     "purple": [(0, 0, 0), (150, 70, 235), (240, 226, 255)],
     # ghostly silver-white with a faint wash of the ghost blue (70,130,255) blended in at low alpha (~12% mid, ~5%
-    # high): channels stay high so it never reads pink/cyan, just silver with a cool ghost tint. Used by Vengeance.
+    # high): channels stay high so it never reads pink/cyan, just silver with a cool ghost tint.
     "silverblue": [(0, 0, 0), (163, 178, 210), (233, 240, 253)],
+    # black/grey but still shines: black shadows, dark neutral (hair-cool) grey body, bright grey-white highlights so
+    # the glow cores still read as shine. Used by the Vengeance proc.
+    "ashen": [(0, 0, 0), (74, 78, 88), (214, 218, 228)],
     # mount skins are ordinary (non-additive) textures: they can carry real shadows, so the low stop is deep navy
     # rather than black, and build_mounts adds a contrast stretch on top
     "ghost_mount": [(6, 10, 48), (60, 120, 240), (245, 250, 255)],
@@ -190,7 +193,7 @@ TEXTURE_GAIN = {
 # ONLY by them, a different palette. Textures shared with a non-overridden model keep the global palette (build()
 # works this out from the full model set), so overriding one effect never recolours another.
 MODEL_PALETTE_OVERRIDES = {
-    "vengeance_state_hand": "silverblue",   # the Retribution "Vengeance" talent proc: ghostly silver-white, faint blue
+    "vengeance_state_hand": "ashen",   # the Retribution "Vengeance" talent proc: black/grey, still shining
 }
 
 
