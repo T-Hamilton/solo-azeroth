@@ -81,6 +81,12 @@ VALUES
 -- the source trainers carry SmartAI scripts keyed by their own entry; the copies have none, so no AI name
 UPDATE creature_template SET AIName = '' WHERE entry IN (9200101, 9200102, 9200103);
 
+-- list 4 was copied from the Blood Elf paladin trainer, so it natively carries the Thalassian (Blood Elf) mounts
+-- Summon Thalassian Warhorse (34767) and Summon Thalassian Charger (34769). Undead paladins ride the Alliance-model
+-- Warhorse / Charger recoloured to the Ochre Skeletal palette (server/local/ghost-mounts.sql), so drop the Blood Elf
+-- pair here or the trainer offers a second, un-recoloured 60%/100% horse next to the right one.
+DELETE FROM trainer_spell WHERE TrainerId = 4 AND SpellId IN (34767, 34769);
+
 -- the Forsaken trainers (trainer list 4, the Horde paladin list) also offer the Alliance-model Warhorse / Charger
 -- spells, which is what mod-solo teaches Undead paladins; their race lock is cleared in SkillLineAbility.dbc
 DELETE FROM trainer_spell WHERE TrainerId = 4 AND SpellId IN (13819, 23214);
