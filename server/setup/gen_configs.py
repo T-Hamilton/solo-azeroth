@@ -221,8 +221,8 @@ OLLAMA = {
     "OllamaChat.EnableSentimentTracking": "0",   # an extra model call per answered line for a +-0.05 tone number; the memories cover it
     # looks like typing instead of a teleporting wall of text
     "OllamaChat.EnableTypingSimulation": "1",
-    "OllamaChat.TypingSimulationBaseDelay": "700",
-    "OllamaChat.TypingSimulationDelayPerChar": "22",
+    "OllamaChat.TypingSimulationBaseDelay": "1200",   # 2026-09-09: slower, more deliberate replies (same number of them)
+    "OllamaChat.TypingSimulationDelayPerChar": "30",
     "OllamaChat.TypingSimulationMaxDelay": "4500",
     "OllamaChat.DisableRepliesInCombat": "1",
     "OllamaChat.EnableWhisperReplies": "1",

@@ -37,23 +37,37 @@ never touch its processes, DBs or repo from here, and do not run both cores' bui
   Adding a new .cpp needs the configure step first (same flags as `server/setup/build-core.cmd`). From the Bash tool
   do NOT pass `-- /m:12 /nologo /v:m` (MSYS mangles them into MSB1008); `--parallel 12` alone is fine.
 - Install = copy `server/build/bin/Release/worldserver.exe` to `server/runtime/`. The running server locks the exe:
-  `tools/soap.py "server shutdown 30"` (players see a countdown), wait for the process to exit, copy, then
-  `powershell -File server/solo.ps1 start`. Confirm with `tools/soap.py "server info"` and the mod-solo lines at the
-  top of `server/runtime/logs/Server.log`. Each `reload config` rotates that log.
+  `tools/soap.py "server shutdown 30"` (players see a countdown), wait for OUR process to exit (match its path - the
+  coa-rebuild worldserver also runs), copy, `Unblock-File` the copied exe (Smart App Control otherwise blocks the new
+  binary at start), then `server\solo.cmd start` (the .ps1 is blocked by the execution policy when run directly).
+  Confirm with `tools/soap.py "server info"` and the mod-solo lines at the top of `server/runtime/logs/Server.log`.
+  Each `reload config` rotates that log. Never restart without the owner's explicit go for that restart; he sometimes
+  restarts from the Bot Settings window himself, which does NOT install a staged exe.
 - SQL for the world DB: `server/modules/mod-solo/sql/world/*.sql` (applied by `solo.cmd configs/start`, must be
   idempotent). Owner-specific rows live in `server/local/*.sql` (ignored).
 
 ## Gotchas that cost time before
 - Server DBCs are stock 3.3.5a: custom items must reuse stock "Deprecated" item ids; new creature display rows must
   be added to BOTH the client table (patch-Z) and `server/runtime/data/dbc/CreatureDisplayInfo.dbc`.
+- Extra race/class combos also need rows in `server/runtime/data/dbc/SkillRaceClassInfo.dbc` (Blizzard wrote e.g. the
+  paladin Swords rows per race): without them `Player::_LoadSkills` deletes the skill at every login and the weapon
+  master never offers it. `tools/fix_skill_race_class.py` adds them from `client-patches/class-combos.txt` and
+  `solo.cmd configs/start` runs it. `ValidateSkillLearnedBySpells` only governs the spell side and is not the fix.
+- The Bot Settings window replaces the whole `ConfOverrides` block of `settings.local.json` on every save, so keys
+  added there by hand vanish. New knobs go in `gen_configs.py`'s WORLD/BOTS/OLLAMA tables.
 - `AiPlayerbot.SelfBotLevel` must stay 1. Bots only log in while a real player is online.
 - Heredocs through the PowerShell/Bash tools have mangled backslashes in .ps1/.py before: write those with the
   Write/Edit tools.
 - The Ascension client's `ChatChannels.dbc` differs from stock; patch-Z carries the stock one.
 
-## Current state (2026-09-08)
+## Current state (2026-09-09)
 Quest item drop rate x3, quest XP x2, kill XP x3 (all on the Bot Settings World tab). Paladins get Crusader Strike at
 level 8 (mod-solo `SoloClassSpells.cpp`). GM Toolkit has "Dungeon quests" (mod-solo `SoloDungeonQuests.cpp`, data in
 world table `solo_dungeon_quests` from `tools/build_dungeon_quests.py`; regenerate -> `solo.cmd configs` ->
-`.reload config`, no rebuild). The `/dq` addon in `client-addons/` is the optional client-side twin of that menu. Paladin mounts use the Ochre Skeletal Warhorse palette (patch-Z rebuilt,
-installs at the next Play with the game closed). See the end of `SUMMARY.md` for what was last verified in game.
+`.reload config`, no rebuild) and "Pause XP (freeze level)" (mod-solo `SoloXpLock.cpp`: per-character flag in the
+characters table `solo_xp_lock`, zeroes every XP source, survives relog/restart). The `/dq` addon in `client-addons/`
+is the optional client-side twin of the dungeon-quest menu. The Undead paladin's Swords skill row comes from
+`tools/fix_skill_race_class.py` (run by `solo.cmd configs/start`). Paladin mounts use the Ochre Skeletal Warhorse
+palette. Ollama typing delays are 1200 ms + 30 ms/char (gen_configs OLLAMA). Client damage meter is Details! (WotLK
+build, Bunny67/Details-WotLK); Recount's TOC was patched to 30300. See the end of `SUMMARY.md` for what was last
+verified in game.

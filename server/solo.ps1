@@ -118,20 +118,28 @@ function Install-ModuleSql {
     }
 }
 
+function Install-ComboSkills {
+    # the extra race/class combos (client-patches\class-combos.txt) need their skill rows in the server's
+    # SkillRaceClassInfo.dbc, or the worldserver deletes e.g. an Undead paladin's Swords skill at every login.
+    # Idempotent; the DBC is read at worldserver start, so this runs before Start-World.
+    $dbc = "$($S.ServerDir)\runtime\data\dbc"
+    if (Test-Path "$dbc\SkillRaceClassInfo.dbc") { & $Py "$($S.RootDir)\tools\fix_skill_race_class.py" $dbc "$($S.RootDir)\client-patches\class-combos.txt" }
+}
+
 switch ($cmd) {
     "mysql"   { Start-MySQL }
     "ollama"  { Start-Ollama }
-    "configs" { & $Py "$($S.ServerDir)\setup\gen_configs.py"; Install-PersonalityPacks; Start-MySQL; Sync-Realmlist; Install-ModuleSql }
+    "configs" { & $Py "$($S.ServerDir)\setup\gen_configs.py"; Install-PersonalityPacks; Start-MySQL; Sync-Realmlist; Install-ModuleSql; Install-ComboSkills }
     "first-run" {
         & powershell -NoProfile -ExecutionPolicy Bypass -File "$($S.ServerDir)\setup\init-db.ps1"
         if (-not $?) { Write-Host "database setup failed"; exit 1 }
         & $Py "$($S.ServerDir)\setup\gen_configs.py"; Install-PersonalityPacks
         Write-Host "First worldserver boot: imports the world database (several minutes) and creates account '$($S.Account)'..."
         & $Py "$($S.ServerDir)\setup\first_start.py"
-        Sync-Realmlist; Install-ModuleSql
+        Sync-Realmlist; Install-ModuleSql; Install-ComboSkills
         Write-Host "Done. Next:  .\solo.cmd shortcuts   then double-click 'Solo Azeroth - Play' on your Desktop."
     }
-    "start"   { Start-MySQL; Sync-Realmlist; Install-ModuleSql; Start-Ollama; Start-Auth; Start-World }
+    "start"   { Start-MySQL; Sync-Realmlist; Install-ModuleSql; Install-ComboSkills; Start-Ollama; Start-Auth; Start-World }
     "stop" {
         foreach ($n in "worldserver", "authserver") {
             Get-Process $n -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$Runtime*" } | ForEach-Object { Write-Host "stopping $n ($($_.Id))"; $_.CloseMainWindow() | Out-Null }

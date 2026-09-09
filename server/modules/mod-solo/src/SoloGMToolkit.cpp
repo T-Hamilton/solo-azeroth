@@ -30,6 +30,10 @@
 #include <string>
 #include <unordered_map>
 
+// Provided by SoloXpLock.cpp
+bool SoloXpLock_IsFrozen(uint32 guid);
+bool SoloXpLock_Toggle(uint32 guid);
+
 namespace
 {
     constexpr uint32 GM_TOOLKIT_ITEM = 3878;
@@ -40,7 +44,7 @@ namespace
     enum GmAction : uint32
     {
         GM_GOD = 1, GM_GMMODE, GM_VISIBLE, GM_FLY, GM_SPEED, GM_CASTTIME, GM_COOLDOWN, GM_POWER, GM_WATERWALK,
-        GM_TAXI, GM_EXPLORE, GM_ALL_ON, GM_ALL_OFF
+        GM_TAXI, GM_EXPLORE, GM_ALL_ON, GM_ALL_OFF, GM_XPLOCK
     };
     enum CharAction : uint32
     {
@@ -249,6 +253,7 @@ namespace
         AddGossipItemFor(p, GOSSIP_ICON_INTERACT_1, std::string("GM mode (tag, no aggro): ") + OnOff(p->IsGameMaster()),        MENU_GM, GM_GMMODE);
         AddGossipItemFor(p, GOSSIP_ICON_INTERACT_1, std::string("Visible to players: ") + OnOff(p->isGMVisible()),               MENU_GM, GM_VISIBLE);
         AddGossipItemFor(p, GOSSIP_ICON_TAXI,       std::string("All flight paths: ") + OnOff(p->isTaxiCheater()),               MENU_GM, GM_TAXI);
+        AddGossipItemFor(p, GOSSIP_ICON_INTERACT_1, std::string("Pause XP (freeze level): ") + OnOff(SoloXpLock_IsFrozen(p->GetGUID().GetCounter())), MENU_GM, GM_XPLOCK);
         AddGossipItemFor(p, GOSSIP_ICON_TAXI,       "Explore the whole map",                                                      MENU_GM, GM_EXPLORE);
         AddGossipItemFor(p, GOSSIP_ICON_DOT,        "Everything ON (god, cast, cooldown, power)",                                 MENU_GM, GM_ALL_ON);
         AddGossipItemFor(p, GOSSIP_ICON_DOT,        "Everything OFF (play normally)",                                             MENU_GM, GM_ALL_OFF);
@@ -290,6 +295,11 @@ namespace
             case GM_GMMODE:    p->SetGameMaster(!p->IsGameMaster()); break;
             case GM_VISIBLE:   p->SetGMVisible(!p->isGMVisible()); break;
             case GM_TAXI:      p->SetTaxiCheater(!p->isTaxiCheater()); break;
+            case GM_XPLOCK:
+                Msg(p, SoloXpLock_Toggle(p->GetGUID().GetCounter())
+                        ? "GM Toolkit: XP paused - you will not gain experience or level up."
+                        : "GM Toolkit: XP resumed - you gain experience normally again.");
+                break;
             case GM_SPEED:
             {
                 float cur = p->GetSpeedRate(MOVE_RUN);
