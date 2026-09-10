@@ -135,6 +135,12 @@ BOTS = {
     "AiPlayerbot.AutoGearQualityLimit": "4",
     "AiPlayerbot.AutoGearBisCommand": "1",
     "AiPlayerbot.AutoGearScoreLimit": str(S.get("AutoGearScoreLimit", 0)),
+    # Random-bot gear quality cap (1 normal .. 4 epic .. 5 legendary). At 4 (epic), with LimitGearExpansion=1 keeping a
+    # level-60 confined to vanilla items and the factory picking the best-scoring item per slot, level-60 bots gear to
+    # the top vanilla epics = AQ40/Naxx40 tier. Side effect: level-80 bots likewise roll their best epics (up to ICC);
+    # cap them with RandomGearScoreLimit if that's unwanted (note it's a global ceiling, so keep it >=92 or it also
+    # knee-caps the 60s). Applied by: playerbots rndbot reload. Existing bots only re-roll gear on a FULL randomize.
+    "AiPlayerbot.RandomGearQualityLimit": "4",
     "AiPlayerbot.SelfBotLevel": "1",                # 1 = GM may turn their own character into a bot with a command.
                                                     # NEVER 3: that attaches a bot AI to YOU on login, and the chat module then treats you as a bot.
     # where the bots hang out: with 1500 bots over four continents a capital had 7 of them. Half of every teleport
@@ -169,6 +175,20 @@ _LEVEL_BRACKETS = [
 ]   # pct must sum to 100; Alliance and Horde share the same shape. Tune the 45 up/down to size the AV pool.
 BOTS["AiPlayerbot.LevelBrackets.Enabled"] = "1"
 BOTS["AiPlayerbot.LevelBrackets.NumRanges"] = str(len(_LEVEL_BRACKETS))
+# Convergence speed. The redistributor flags surplus bots every CheckFrequency, and ProcessPendingLevelResets
+# actually re-levels up to FlaggedProcessLimit of them every CheckFlaggedFrequency seconds. The stock 5/15s
+# (~20/min) takes ~an hour to concentrate ~900 bots at 60; 40/10s (~240/min) converges in a few minutes. Steady
+# state the queue is near-empty, so these are fine to leave. Applied by .reload config (LoadRandomBotLevelConfig).
+BOTS["AiPlayerbot.LevelBrackets.CheckFrequency"] = "90"
+BOTS["AiPlayerbot.LevelBrackets.CheckFlaggedFrequency"] = "10"
+BOTS["AiPlayerbot.LevelBrackets.FlaggedProcessLimit"] = "40"
+# Stop random bots gaining XP (0 = no organic leveling; multiplies the server XP rate). Without this, actively
+# grinding bots slip *upward* through the undefined 51-59 gap while leveling - and because a bot in combat can't be
+# re-leveled, ~13% of the AV-eligible pool sits at 51-59 in perpetual transit, polluting AV. With XP off, the bracket
+# system is the sole authority on bot level: nothing levels into the gap, it drains to zero, and AV is pure 60. The
+# world still shows bots at every level (the brackets place them there); they just don't drift. Revert to 1.0 to
+# restore organic bot leveling. Applied by: playerbots rndbot reload.
+BOTS["AiPlayerbot.RandomBotXPRate"] = "0"
 for _faction in ("Alliance", "Horde"):
     for _i, (_lo, _hi, _pct) in enumerate(_LEVEL_BRACKETS, start=1):
         _pfx = "AiPlayerbot.LevelBrackets.%s.Range%d" % (_faction, _i)
