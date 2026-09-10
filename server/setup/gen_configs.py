@@ -241,6 +241,9 @@ OLLAMA = {
     # reactions to things that happen around you (levels, loot, deaths, duels)
     "OllamaChat.EnableEventChatter": "1",
     "OllamaChat.EventChatterRealPlayerDistance": "60",
+    # keep Party AND Raid chat bot-free (real group/raid chat stays legible, e.g. on stream during AV);
+    # Say/Yell/General/Trade/LFG chatter is unaffected
+    "OllamaChat.DisableForParty": "1",
     # bots answering bots: this is what makes it a conversation instead of a wall of openers
     "OllamaChat.BotReplyChance.Say": "30",
     "OllamaChat.BotReplyChance.Channel": "30",
