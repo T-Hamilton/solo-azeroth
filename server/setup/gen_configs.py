@@ -96,6 +96,10 @@ WORLD = {
     # profession skill points gained per successful craft / gather (retail = 1). Live: .reload config
     "SkillGain.Crafting": str(S.get("ProfessionRate", 1)),
     "SkillGain.Gathering": str(S.get("ProfessionRate", 1)),
+    # Alterac Valley starting reinforcements per team (blizzlike 600). A huge value effectively disables
+    # reinforcement-based endings: AV can then only be won by killing the enemy general. Read per AV match at
+    # reset, so `.reload config` applies it to NEW matches with no restart.
+    "Battleground.Alterac.Reinforcements": str(S.get("AVReinforcements", 600)),
     "Appender.Server": "2,6,17,Server.log,w",
     # ChatDebug 2: also trace every channel join/leave packet the client sends (CMSG_JOIN_CHANNEL ...) into Server.log
     **({"Logger.chat.system": "5,Console Server"} if S.get("ChatDebug", 0) >= 2 else {}),   # 1 = timestamp every line, 16 = keep the previous log as Server.log.<date> on restart
