@@ -101,6 +101,9 @@ WORLD = {
     # can then only be won by killing the enemy general. Read per AV match at reset (BattlegroundAV.cpp:1830),
     # so `.reload config` applies it to NEW matches with no restart (a match already in progress keeps its value).
     "Battleground.Alterac.Reinforcements": str(S.get("AVReinforcements", 600)),
+    # Seconds of "doors closed" prep countdown after a BG pops before the match starts (blizzlike 120).
+    # Read per match at setup, so `.reload config` applies it to NEW matches with no restart.
+    "Battleground.PrepTime": str(S.get("BGPrepTime", 120)),
     "Appender.Server": "2,6,17,Server.log,w",
     # ChatDebug 2: also trace every channel join/leave packet the client sends (CMSG_JOIN_CHANNEL ...) into Server.log
     **({"Logger.chat.system": "5,Console Server"} if S.get("ChatDebug", 0) >= 2 else {}),   # 1 = timestamp every line, 16 = keep the previous log as Server.log.<date> on restart
