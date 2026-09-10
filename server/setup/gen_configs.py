@@ -155,6 +155,26 @@ BOTS = {
     "AiPlayerbot.MinRandomBotTeleportInterval": "1800",
     "AiPlayerbot.MaxRandomBotTeleportInterval": "5400",
 }
+# --- Level distribution: a dedicated level-60 pool so Alterac Valley fills with 60s, not a 51-60 mix ---
+# AV's lowest battleground bracket is fixed by the game at 51-60 (PvPDifficulty.dbc), so the BG itself
+# cannot be narrowed. Instead we shape the random-bot population: turn on the level-bracket redistributor,
+# give level 60 its own bracket with a big share, and leave 51-59 undefined. A bot that gains XP into that
+# 50-59 gap is flagged and reset to the nearest defined bracket within ~15 s (RandomBotLevelMgr), so in
+# steady state the only bots eligible for AV's 51-60 slice are level 60. The rest of the leveling world
+# (1-49, 61-79, 80) stays populated. Apply live with:  tools/soap.py "playerbots rndbot reload"
+_LEVEL_BRACKETS = [
+    (1, 9, 5), (10, 19, 5), (20, 29, 5), (30, 39, 5), (40, 49, 5),
+    (60, 60, 45),            # dedicated level-60 pool -> full, pure-60 Alterac Valley
+    (61, 69, 5), (70, 79, 5), (80, 80, 20),
+]   # pct must sum to 100; Alliance and Horde share the same shape. Tune the 45 up/down to size the AV pool.
+BOTS["AiPlayerbot.LevelBrackets.Enabled"] = "1"
+BOTS["AiPlayerbot.LevelBrackets.NumRanges"] = str(len(_LEVEL_BRACKETS))
+for _faction in ("Alliance", "Horde"):
+    for _i, (_lo, _hi, _pct) in enumerate(_LEVEL_BRACKETS, start=1):
+        _pfx = "AiPlayerbot.LevelBrackets.%s.Range%d" % (_faction, _i)
+        BOTS["%s.Lower" % _pfx] = str(_lo)
+        BOTS["%s.Upper" % _pfx] = str(_hi)
+        BOTS["%s.Pct" % _pfx] = str(_pct)
 # The chat governor, tuned for an always-on, bot-to-bot general chat (docs/LLM-CHAT.md explains each knob).
 SYSTEM_PROMPT = (
     "You are a real World of Warcraft player typing in chat on a 3.3.5 private server. Stay completely in character "
