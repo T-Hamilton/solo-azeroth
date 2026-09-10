@@ -16,6 +16,7 @@
 
 #include "Chat.h"
 #include "GossipDef.h"
+#include "Group.h"
 #include "Item.h"
 #include "Log.h"
 #include "MotionMaster.h"
@@ -39,6 +40,20 @@ namespace
     constexpr uint32 GM_TOOLKIT_ITEM = 3878;
     constexpr uint32 XP_POTION_ITEM  = 2461;   // Potion of Experience (SoloXPPotion.cpp)
 
+    // The classic level-60 world buffs (all stock spells, verified in Spell.dbc). Sayge's buffs are mutually
+    // exclusive, so only the damage one is applied. Each keeps the spell's own duration (1-2 h).
+    constexpr uint32 WORLD_BUFFS[] = {
+        22888,   // Rallying Cry of the Dragonslayer  (Onyxia / Nefarian head turn-in)
+        24425,   // Spirit of Zandalar                (Zul'Gurub)
+        16609,   // Warchief's Blessing               (Zul'Gurub)
+        22817,   // Fengus' Ferocity                  (Dire Maul tribute)
+        22818,   // Mol'dar's Moxie                   (Dire Maul tribute)
+        22820,   // Slip'kik's Savvy                  (Dire Maul tribute)
+        15366,   // Songflower Serenade               (Felwood)
+        23768,   // Sayge's Dark Fortune of Damage    (Darkmoon Faire)
+        29534,   // Traces of Silithyst               (Silithus world PvP)
+    };
+
     enum Menu : uint32 { MENU_MAIN = 1, MENU_CITIES, MENU_START, MENU_DUNGEONS, MENU_GM, MENU_CHAR, MENU_DQ_EXP, MENU_DQ_LIST };
     enum MainAction : uint32 { MAIN_CITIES = 1, MAIN_START, MAIN_DUNGEONS, MAIN_GM, MAIN_CHAR, MAIN_BACK, MAIN_CLOSE, MAIN_DQ, MAIN_DQ_HERE };
     enum GmAction : uint32
@@ -49,7 +64,7 @@ namespace
     enum CharAction : uint32
     {
         CHAR_HEAL = 1, CHAR_REVIVE, CHAR_COOLDOWNS, CHAR_LEVEL1, CHAR_LEVEL5, CHAR_LEVEL10, CHAR_MAXSKILL,
-        CHAR_REPAIR, CHAR_GOLD, CHAR_XPPOTIONS, CHAR_MOUNTS, CHAR_RESPEC
+        CHAR_REPAIR, CHAR_GOLD, CHAR_XPPOTIONS, CHAR_MOUNTS, CHAR_RESPEC, CHAR_WORLDBUFFS
     };
     constexpr uint32 ACTION_MAIN = 1000;   // "back to the main menu" in every submenu
     constexpr uint32 ACTION_DQ_EXP = 999;  // "back to the expansion list" in a dungeon-quest list
@@ -277,6 +292,7 @@ namespace
         AddGossipItemFor(p, GOSSIP_ICON_VENDOR,     "Give 5 Potions of Experience",    MENU_CHAR, CHAR_XPPOTIONS);
         AddGossipItemFor(p, GOSSIP_ICON_TAXI,       "Learn class mounts + riding",     MENU_CHAR, CHAR_MOUNTS);
         AddGossipItemFor(p, GOSSIP_ICON_TRAINER,    "Reset talents (free respec)",     MENU_CHAR, CHAR_RESPEC);
+        AddGossipItemFor(p, GOSSIP_ICON_BATTLE,     "World buffs to raid (Ony/Nef, ZG, DM, Songflower...)", MENU_CHAR, CHAR_WORLDBUFFS);
         AddGossipItemFor(p, GOSSIP_ICON_CHAT,       "<- Back",                         MENU_CHAR, ACTION_MAIN);
         Send(p, item);
     }
@@ -382,6 +398,27 @@ namespace
                 p->SendTalentsInfoData(false);    // refresh the client's talent tab
                 Msg(p, "GM Toolkit: talents reset. Spend your points again in the talent tab.");
                 break;
+            case CHAR_WORLDBUFFS:
+            {
+                uint32 buffed = 0;
+                auto applyTo = [](Player* t) { for (uint32 s : WORLD_BUFFS) t->AddAura(s, t); };
+                if (Group* group = p->GetGroup())
+                {
+                    for (GroupReference* itr = group->GetFirstMember(); itr; itr = itr->next())
+                        if (Player* member = itr->GetSource())   // online members only (skips offline bots)
+                        {
+                            applyTo(member);
+                            ++buffed;
+                        }
+                }
+                else
+                {
+                    applyTo(p);
+                    ++buffed;
+                }
+                Msg(p, "GM Toolkit: world buffs applied to " + std::to_string(buffed) + " raid member(s).");
+                break;
+            }
             default: break;
         }
     }
