@@ -169,10 +169,10 @@ BOTS = {
 # steady state the only bots eligible for AV's 51-60 slice are level 60. The rest of the leveling world
 # (1-49, 61-79, 80) stays populated. Apply live with:  tools/soap.py "playerbots rndbot reload"
 _LEVEL_BRACKETS = [
-    (1, 9, 5), (10, 19, 5), (20, 29, 5), (30, 39, 5), (40, 49, 5),
-    (60, 60, 45),            # dedicated level-60 pool -> full, pure-60 Alterac Valley
-    (61, 69, 5), (70, 79, 5), (80, 80, 20),
-]   # pct must sum to 100; Alliance and Horde share the same shape. Tune the 45 up/down to size the AV pool.
+    (1, 59, 25),             # 25% spread randomly below 60 (the "living world" tail)
+    (60, 60, 50),            # 50% parked at exactly 60 -> the AV / raid pool
+    (61, 70, 25),            # 25% spread randomly 61-70
+]   # pct must sum to 100; Alliance and Horde share the same shape. NumRanges follows len() automatically.
 BOTS["AiPlayerbot.LevelBrackets.Enabled"] = "1"
 BOTS["AiPlayerbot.LevelBrackets.NumRanges"] = str(len(_LEVEL_BRACKETS))
 # Convergence speed. The redistributor flags surplus bots every CheckFrequency, and ProcessPendingLevelResets
